@@ -22,13 +22,18 @@ namespace PreSystem.StockControl.WebApi.Configurations
             services.AddScoped<IStockMovementRepository, StockMovementRepository>();
             services.AddScoped<IStockAlertRepository, StockAlertRepository>();
 
-
+            // Repositórios de Hierarquia
+            services.AddScoped<IComponentGroupRepository, ComponentGroupRepository>();
+            services.AddScoped<IComponentDeviceRepository, ComponentDeviceRepository>();
+            services.AddScoped<IComponentValueRepository, ComponentValueRepository>();
+            services.AddScoped<IComponentPackageRepository, ComponentPackageRepository>();
 
             // Services
             services.AddScoped<IComponentService, ComponentService>();
             services.AddScoped<IProductService, ProductService>();
             services.AddScoped<IStockMovementService, StockMovementService>();
             services.AddScoped<IStockAlertService, StockAlertService>();
+            services.AddScoped<IGroupHierarchyService, GroupHierarchyService>();
 
 
 
