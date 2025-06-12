@@ -148,6 +148,29 @@ namespace PreSystem.StockControl.Application.Services
             };
         }
 
+        // Retorna todas as movimentações de um componente específico
+        public async Task<IEnumerable<StockMovementDto>> GetByComponentIdAsync(int componentId)
+        {
+            var movements = await _movementRepository.GetAllAsync();
+
+            return movements
+                .Where(m => m.ComponentId == componentId)
+                .OrderByDescending(m => m.PerformedAt)
+                .Select(m => new StockMovementDto
+                {
+                    Id = m.Id,
+                    ComponentId = m.ComponentId,
+                    ComponentName = m.Component?.Name ?? "Unknown",
+                    MovementType = m.MovementType,
+                    Quantity = m.QuantityChanged,
+                    MovementDate = m.PerformedAt,
+                    PerformedBy = m.PerformedBy,
+                    UserId = m.UserId,
+                    UserName = m.User?.Name ?? m.PerformedBy
+                })
+                .ToList();
+        }
+
         // Registra múltiplas movimentações de uma vez (movimentação em massa)
         public async Task<BulkMovementResultDto> RegisterBulkMovementsAsync(BulkStockMovementDto dto)
         {
