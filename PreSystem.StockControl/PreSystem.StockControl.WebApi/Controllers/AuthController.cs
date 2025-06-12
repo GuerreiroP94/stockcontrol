@@ -40,7 +40,7 @@ namespace PreSystem.StockControl.WebApi.Controllers
                 new Claim(ClaimTypes.Name, user.Email),
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
                 new Claim("UserId", user.Id.ToString()),
-                new Claim(ClaimTypes.Role, user.Role ?? "operator") // ✅ CORREÇÃO: Use ClaimTypes.Role
+                new Claim(ClaimTypes.Role, user.Role ?? "operator") 
             };
 
             // 3. Pega os dados do appsettings.json

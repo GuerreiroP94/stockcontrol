@@ -1,16 +1,35 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Mail, Package } from 'lucide-react';
+import { api } from '../../services/api';
 
 const ForgotPasswordPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [enviado, setEnviado] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [devToken, setDevToken] = useState('');
   const navigate = useNavigate();
 
-  const handleEnviar = (e: React.FormEvent) => {
+  const handleEnviar = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Simula envio de email
-    setEnviado(true);
+    setError('');
+    setLoading(true);
+
+    try {
+      const response = await api.post('/auth/forgot-password', { email });
+      
+      // Em desenvolvimento, mostra o token
+      if (response.data.token) {
+        setDevToken(response.data.token);
+      }
+      
+      setEnviado(true);
+    } catch (error: any) {
+      setError(error.response?.data?.message || 'Erro ao processar solicitação');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -34,6 +53,13 @@ const ForgotPasswordPage: React.FC = () => {
             : 'Digite seu e-mail para receber as instruções'}
         </p>
 
+        {/* Error Message */}
+        {error && (
+          <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+            {error}
+          </div>
+        )}
+
         {enviado ? (
           <div className="text-center">
             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -45,12 +71,27 @@ const ForgotPasswordPage: React.FC = () => {
             <p className="text-sm text-gray-600 mb-6">
               Verifique sua caixa de entrada e siga as instruções para redefinir sua senha.
             </p>
+            
+            {/* Em desenvolvimento, mostra o link direto */}
+            {devToken && (
+              <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-sm font-medium text-yellow-800 mb-2">Modo Desenvolvimento:</p>
+                <a 
+                  href={`/reset-password?token=${devToken}`}
+                  className="text-sm text-blue-600 hover:text-blue-700 underline break-all"
+                >
+                  Clique aqui para resetar a senha
+                </a>
+              </div>
+            )}
+            
             <button
               onClick={() => {
                 setEnviado(false);
                 setEmail('');
+                setDevToken('');
               }}
-              className="text-sm text-blue-600 hover:text-blue-700 hover:underline transition-colors"
+              className="text-sm text-blue-600 hover:text-blue-700 hover:underline transition-colors mt-4"
             >
               Enviar novamente
             </button>
@@ -74,10 +115,13 @@ const ForgotPasswordPage: React.FC = () => {
 
             <button
               type="submit"
-              disabled={!email}
-              className="w-full py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all duration-200 font-medium shadow-sm"
+              disabled={!email || loading}
+              className="w-full py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all duration-200 font-medium shadow-sm flex items-center justify-center gap-2"
             >
-              Enviar Link de Recuperação
+              {loading && (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+              )}
+              {loading ? 'Enviando...' : 'Enviar Link de Recuperação'}
             </button>
           </form>
         )}

@@ -17,6 +17,7 @@ import MovementsListPage from './pages/movements/MovementsListPage';
 import AlertsPage from './pages/alerts/AlertsPage';
 import UsersPage from './pages/users/UsersPage';
 import SettingsPage from './pages/settings/SettingsPage';
+import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 
 function App() {
   return (
@@ -26,6 +27,8 @@ function App() {
           {/* Public Routes */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+
 
           {/* Protected Routes */}
           <Route element={<ProtectedRoute />}>

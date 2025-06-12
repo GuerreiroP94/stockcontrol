@@ -23,6 +23,8 @@ builder.Services.AddHttpContextAccessor(); // Permite acessar o contexto HTTP at
 builder.Services.AddScoped<IUserContextService, UserContextService>(); // Injeta o serviço que fornece dados do usuário logado a partir do token JWT
 builder.Services.AddScoped<IUserRepository, UserRepository>(); // Injeta o repositório de usuários
 builder.Services.AddScoped<IUserService, UserService>(); // Injeta o serviço de usuários
+builder.Services.AddScoped<IPasswordResetTokenRepository, PasswordResetTokenRepository>(); // Repositório de tokens de reset
+builder.Services.AddScoped<IEmailService, EmailService>(); // Serviço de email
 
 
 

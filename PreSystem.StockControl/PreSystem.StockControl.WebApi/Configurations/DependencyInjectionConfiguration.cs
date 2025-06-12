@@ -21,6 +21,8 @@ namespace PreSystem.StockControl.WebApi.Configurations
             services.AddScoped<IProductComponentRepository, ProductComponentRepository>();
             services.AddScoped<IStockMovementRepository, StockMovementRepository>();
             services.AddScoped<IStockAlertRepository, StockAlertRepository>();
+            services.AddScoped<IPasswordResetTokenRepository, PasswordResetTokenRepository>();
+
 
             // Repositórios de Hierarquia
             services.AddScoped<IComponentGroupRepository, ComponentGroupRepository>();
@@ -34,7 +36,7 @@ namespace PreSystem.StockControl.WebApi.Configurations
             services.AddScoped<IStockMovementService, StockMovementService>();
             services.AddScoped<IStockAlertService, StockAlertService>();
             services.AddScoped<IGroupHierarchyService, GroupHierarchyService>();
-
+            services.AddScoped<IEmailService, EmailService>();
 
 
             return services;
