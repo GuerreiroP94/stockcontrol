@@ -1,13 +1,10 @@
-﻿using CsvHelper;
-using CsvHelper.Configuration;
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using PreSystem.StockControl.Application.DTOs;
 using PreSystem.StockControl.Application.DTOs.Filters;
 using PreSystem.StockControl.Application.Interfaces.Services;
 using PreSystem.StockControl.Domain.Entities;
 using PreSystem.StockControl.Domain.Interfaces.Repositories;
-using System.Formats.Asn1;
-using System.Globalization;
+
 
 namespace PreSystem.StockControl.Application.Services
 {
@@ -152,98 +149,6 @@ namespace PreSystem.StockControl.Application.Services
             await _componentRepository.DeleteAsync(component);
             _logger.LogInformation("Componente deletado: {Id} - {Nome}", component.Id, component.Name);
             return true;
-        }
-
-        // Importação em massa de componentes
-        public async Task<ImportResultDto> ImportComponentsAsync(Stream csvStream)
-        {
-            var result = new ImportResultDto();
-            var errors = new List<string>();
-            var componentsToAdd = new List<Component>();
-
-            try
-            {
-                using var reader = new StreamReader(csvStream);
-                using var csv = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture)
-                {
-                    HasHeaderRecord = true,
-                    Delimiter = ";",
-                    BadDataFound = null
-                });
-
-                var records = csv.GetRecords<ComponentImportDto>().ToList();
-                result.TotalRecords = records.Count;
-
-                foreach (var record in records)
-                {
-                    try
-                    {
-                        // Validações básicas
-                        if (string.IsNullOrWhiteSpace(record.Name))
-                        {
-                            errors.Add($"Nome é obrigatório para o componente na linha {result.SuccessCount + result.ErrorCount + 2}");
-                            result.ErrorCount++;
-                            continue;
-                        }
-
-                        if (string.IsNullOrWhiteSpace(record.Group))
-                        {
-                            errors.Add($"Grupo é obrigatório para o componente '{record.Name}'");
-                            result.ErrorCount++;
-                            continue;
-                        }
-
-                        var component = new Component
-                        {
-                            Name = record.Name,
-                            Description = record.Description,
-                            Group = record.Group,
-                            Device = record.Device,
-                            Value = record.Value,
-                            Package = record.Package,
-                            Characteristics = record.Characteristics,
-                            InternalCode = record.InternalCode,
-                            Price = record.Price,
-                            Environment = record.Environment,
-                            Drawer = record.Drawer,
-                            Division = record.Division,
-                            NCM = record.NCM,
-                            NVE = record.NVE,
-                            QuantityInStock = record.QuantityInStock,
-                            MinimumQuantity = record.MinimumQuantity,
-                            CreatedAt = DateTime.UtcNow,
-                            UpdatedAt = DateTime.UtcNow
-                        };
-
-                        componentsToAdd.Add(component);
-                        result.SuccessCount++;
-                    }
-                    catch (Exception ex)
-                    {
-                        errors.Add($"Erro ao processar componente '{record.Name}': {ex.Message}");
-                        result.ErrorCount++;
-                    }
-                }
-
-                // Adiciona todos os componentes válidos
-                if (componentsToAdd.Any())
-                {
-                    await _componentRepository.AddRangeAsync(componentsToAdd);
-                    _logger.LogInformation("Importação em massa concluída: {Success} componentes importados, {Error} erros",
-                        result.SuccessCount, result.ErrorCount);
-                }
-
-                result.Success = result.ErrorCount == 0;
-                result.Errors = errors;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Erro durante importação em massa de componentes");
-                result.Success = false;
-                result.Errors.Add($"Erro geral na importação: {ex.Message}");
-            }
-
-            return result;
         }
 
         // Deleta múltiplos componentes

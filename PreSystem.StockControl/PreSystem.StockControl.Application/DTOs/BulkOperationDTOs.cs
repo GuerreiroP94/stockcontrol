@@ -1,32 +1,5 @@
 ﻿namespace PreSystem.StockControl.Application.DTOs
 {
-    // DTO para importação em massa de componentes
-    public class ComponentImportDto
-    {
-        public string Name { get; set; } = string.Empty;
-        public string? Description { get; set; }
-        public string Group { get; set; } = string.Empty;
-        public string? Device { get; set; }
-        public string? Value { get; set; }
-        public string? Package { get; set; }
-        public string? Characteristics { get; set; }
-        public string? InternalCode { get; set; }
-        public decimal? Price { get; set; }
-        public string Environment { get; set; } = "estoque";
-        public string? Drawer { get; set; }
-        public string? Division { get; set; }
-        public string? NCM { get; set; }
-        public string? NVE { get; set; }
-        public int QuantityInStock { get; set; }
-        public int MinimumQuantity { get; set; }
-    }
-
-    // DTO para importação em massa (lista de componentes)
-    public class BulkImportDto
-    {
-        public List<ComponentImportDto> Components { get; set; } = new();
-    }
-
     // DTO para movimentação em massa de estoque
     public class BulkStockMovementDto
     {
@@ -66,15 +39,5 @@
         public int SuggestedPurchase { get; set; }
         public decimal? UnitPrice { get; set; }
         public decimal TotalPrice { get; set; }
-    }
-
-    // DTO para resultado de importação
-    public class ImportResultDto
-    {
-        public bool Success { get; set; }
-        public int TotalRecords { get; set; }
-        public int SuccessCount { get; set; }
-        public int ErrorCount { get; set; }
-        public List<string> Errors { get; set; } = new();
     }
 }

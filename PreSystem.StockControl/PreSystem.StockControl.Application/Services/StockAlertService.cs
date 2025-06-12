@@ -8,10 +8,12 @@ namespace PreSystem.StockControl.Application.Services
     public class StockAlertService : IStockAlertService
     {
         private readonly IStockAlertRepository _alertRepository;
+        private readonly IComponentRepository _componentRepository;
 
-        public StockAlertService(IStockAlertRepository alertRepository)
+        public StockAlertService(IStockAlertRepository alertRepository, IComponentRepository componentRepository)
         {
             _alertRepository = alertRepository;
+            _componentRepository = componentRepository;
         }
 
         // Retorna todos os alertas de estoque
