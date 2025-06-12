@@ -28,11 +28,11 @@ namespace PreSystem.StockControl.WebApi.Controllers
             return Ok(movements);
         }
 
-        // GET: api/StockMovement/component/5
+        // GET: api/StockMovement/component/
         [HttpGet("component/{componentId}")]
         public async Task<ActionResult<IEnumerable<StockMovementDto>>> GetByComponentId(int componentId)
         {
-            var movements = await _stockMovementService.GetMovementByIdAsync(componentId);
+            var movements = await _stockMovementService.GetByComponentIdAsync(componentId);
             return Ok(movements);
         }
 

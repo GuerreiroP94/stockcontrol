@@ -13,7 +13,10 @@ namespace PreSystem.StockControl.Application.Interfaces.Services
         Task<IEnumerable<StockMovementDto>> GetAllMovementsAsync(StockMovementQueryParameters parameters);
 
         // Retorna uma movimentação por ID
-        Task<StockMovementDto?> GetMovementByIdAsync(int componentId);
+        Task<StockMovementDto?> GetMovementByIdAsync(int id);
+
+        // Retorna movimentações de um componente específico
+        Task<IEnumerable<StockMovementDto>> GetByComponentIdAsync(int componentId);
 
         Task<BulkMovementResultDto> RegisterBulkMovementsAsync(BulkStockMovementDto dto);
     }

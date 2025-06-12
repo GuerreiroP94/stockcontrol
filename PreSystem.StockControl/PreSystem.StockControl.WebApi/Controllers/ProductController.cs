@@ -51,10 +51,16 @@ namespace PreSystem.StockControl.WebApi.Controllers
             return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
         }
 
-        // PUT: api/Product
-        [HttpPut]
-        public async Task<ActionResult> Update([FromBody] ProductUpdateDto dto)
+        // PUT: api/Product/{id}
+        [HttpPut("{id}")]
+        public async Task<ActionResult> Update(int id, [FromBody] ProductUpdateDto dto)
         {
+            // Validação para garantir que o ID da URL corresponde ao ID do body
+            if (id != dto.Id)
+            {
+                return BadRequest("ID na URL não corresponde ao ID no body");
+            }
+
             var updated = await _productService.UpdateProductAsync(dto);
             if (updated == null)
                 return NotFound();
