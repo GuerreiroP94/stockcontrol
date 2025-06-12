@@ -56,5 +56,55 @@ namespace PreSystem.StockControl.Application.Services
                 CreatedAt = alert.CreatedAt
             });
         }
+
+        public async Task<PurchaseListDto> GetPurchaseListAsync()
+        {
+            // Buscar todos os alertas ativos
+            var alerts = await _alertRepository.GetAllAsync();
+
+            // Buscar componentes únicos com alertas
+            var componentIds = alerts.Select(a => a.ComponentId).Distinct().ToList();
+
+            // TODO: Você precisa adicionar um método no IComponentRepository
+            // Task<IEnumerable<Component>> GetByIdsAsync(IEnumerable<int> ids);
+
+            // Por enquanto, vamos buscar todos e filtrar
+            var allComponents = await _componentRepository.GetAllAsync();
+            var alertedComponents = allComponents.Where(c => componentIds.Contains(c.Id)).ToList();
+
+            // Agrupar componentes ignorando ambiente
+            var grouped = alertedComponents
+                .GroupBy(c => new {
+                    c.Group,
+                    c.Device,  // Este é o "nome" do componente
+                    c.Value,
+                    c.Package,
+                    c.InternalCode
+                })
+                .Select(g => new PurchaseListItemDto
+                {
+                    ComponentName = g.Key.Device ?? "Sem nome",  // Device é o nome
+                    Group = g.Key.Group,
+                    Device = g.Key.Device,
+                    Value = g.Key.Value,
+                    Package = g.Key.Package,
+                    InternalCode = g.Key.InternalCode,
+                    Environments = g.Select(c => c.Environment).Distinct().ToList(),
+                    MaximumMinimumQuantity = g.Max(c => c.MinimumQuantity),
+                    SuggestedPurchase = g.Max(c => c.MinimumQuantity) * 2,
+                    UnitPrice = g.Max(c => c.Price ?? 0),
+                    TotalPrice = g.Max(c => c.MinimumQuantity) * 2 * g.Max(c => c.Price ?? 0)
+                })
+                .OrderBy(i => i.Group)
+                .ThenBy(i => i.Device)
+                .ToList();
+
+            return new PurchaseListDto
+            {
+                Items = grouped,
+                TotalValue = grouped.Sum(i => i.TotalPrice),
+                TotalItems = grouped.Count
+            };
+        }
     }
 }

@@ -26,5 +26,8 @@
 
         // Novo campo com o nome do usuário relacionado
         public string? UserName { get; set; }
+
+        // Nome do componente
+        public string? ComponentName { get; set; }  
     }
 }

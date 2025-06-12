@@ -5,4 +5,6 @@ public interface IStockAlertService
 {
     Task<IEnumerable<StockAlertDto>> GetAllAlertsAsync(StockAlertQueryParameters parameters);
     Task<IEnumerable<StockAlertDto>> GetAlertsByComponentIdAsync(int componentId);
+    Task<PurchaseListDto> GetPurchaseListAsync();
+
 }

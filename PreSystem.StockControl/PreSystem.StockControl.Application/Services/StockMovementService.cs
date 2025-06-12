@@ -119,6 +119,7 @@ namespace PreSystem.StockControl.Application.Services
             {
                 Id = m.Id,
                 ComponentId = m.ComponentId,
+                ComponentName = m.Component.Name,
                 MovementType = m.MovementType,
                 Quantity = m.QuantityChanged,
                 MovementDate = m.PerformedAt,

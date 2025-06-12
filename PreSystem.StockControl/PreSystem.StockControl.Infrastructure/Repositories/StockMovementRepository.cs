@@ -21,6 +21,7 @@ namespace PreSystem.StockControl.Infrastructure.Repositories
         {
             return await _context.StockMovements
                 .Include(m => m.User) // Carrega o nome do usuário via navegação
+                .Include(m => m.Component)
                 .ToListAsync();
         }
 
@@ -29,6 +30,7 @@ namespace PreSystem.StockControl.Infrastructure.Repositories
         {
             return await _context.StockMovements
                 .Include(m => m.User)
+                .Include(m => m.Component)
                 .FirstOrDefaultAsync(m => m.Id == id);
         }
 
@@ -52,5 +54,7 @@ namespace PreSystem.StockControl.Infrastructure.Repositories
             _context.StockMovements.Remove(movement);
             await _context.SaveChangesAsync();
         }
+
+
     }
 }

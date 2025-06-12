@@ -34,5 +34,13 @@ namespace PreSystem.StockControl.WebApi.Controllers
             var alerts = await _alertService.GetAlertsByComponentIdAsync(componentId);
             return Ok(alerts);
         }
+
+        // GET: api/StockAlert/purchase-list
+        [HttpGet("purchase-list")]
+        public async Task<ActionResult<PurchaseListDto>> GetPurchaseList()
+        {
+            var purchaseList = await _alertService.GetPurchaseListAsync();
+            return Ok(purchaseList);
+        }
     }
 }
