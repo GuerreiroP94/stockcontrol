@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using PreSystem.StockControl.Application.DTOs;
+using PreSystem.StockControl.Application.Interfaces.Services;
+using PreSystem.StockControl.Domain.Entities;
 using PreSystem.StockControl.Domain.Interfaces.Repositories;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -17,11 +19,22 @@ namespace PreSystem.StockControl.WebApi.Controllers
     {
         private readonly IConfiguration _configuration;
         private readonly IUserRepository _userRepository;
+        private readonly IPasswordResetTokenRepository _passwordResetTokenRepository;
+        private readonly IEmailService _emailService;
+        private readonly ILogger<AuthController> _logger;
 
-        public AuthController(IConfiguration configuration, IUserRepository userRepository)
+        public AuthController(
+            IConfiguration configuration,
+            IUserRepository userRepository,
+            IPasswordResetTokenRepository passwordResetTokenRepository,
+            IEmailService emailService,
+            ILogger<AuthController> logger)
         {
             _configuration = configuration;
             _userRepository = userRepository;
+            _passwordResetTokenRepository = passwordResetTokenRepository;
+            _emailService = emailService;
+            _logger = logger;
         }
 
         // POST: api/auth/login
@@ -40,7 +53,7 @@ namespace PreSystem.StockControl.WebApi.Controllers
                 new Claim(ClaimTypes.Name, user.Email),
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
                 new Claim("UserId", user.Id.ToString()),
-                new Claim(ClaimTypes.Role, user.Role ?? "operator") 
+                new Claim(ClaimTypes.Role, user.Role ?? "operator")
             };
 
             // 3. Pega os dados do appsettings.json
@@ -78,6 +91,133 @@ namespace PreSystem.StockControl.WebApi.Controllers
                     Role = user.Role
                 }
             });
+        }
+
+        // POST: api/auth/forgot-password
+        [AllowAnonymous]
+        [HttpPost("forgot-password")]
+        public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
+        {
+            try
+            {
+                // Busca o usuário pelo email
+                var user = await _userRepository.GetByEmailAsync(dto.Email);
+
+                // Por segurança, sempre retorna sucesso mesmo se o email não existir
+                if (user == null)
+                {
+                    _logger.LogWarning("Tentativa de recuperação de senha para email não cadastrado: {Email}", dto.Email);
+                    return Ok(new PasswordResetResponseDto
+                    {
+                        Success = true,
+                        Message = "Se o email existir em nossa base, você receberá as instruções de recuperação."
+                    });
+                }
+
+                // Invalida tokens anteriores
+                await _passwordResetTokenRepository.InvalidateTokensByEmailAsync(dto.Email);
+
+                // Cria novo token
+                var resetToken = new PasswordResetToken
+                {
+                    Email = dto.Email,
+                    UserId = user.Id,
+                    Token = Guid.NewGuid().ToString(),
+                    ExpiresAt = DateTime.UtcNow.AddHours(24)
+                };
+
+                await _passwordResetTokenRepository.AddAsync(resetToken);
+
+                // Monta o link de reset
+                var frontendUrl = _configuration.GetValue<string>("FrontendUrl") ?? "http://localhost:3000";
+                var resetLink = $"{frontendUrl}/reset-password?token={resetToken.Token}";
+
+                // Envia o email
+                var emailSent = await _emailService.SendPasswordResetEmailAsync(dto.Email, resetLink);
+
+                // Em desenvolvimento, retorna o token para facilitar testes
+                var isDevelopment = _configuration.GetValue<bool>("EmailSettings:UseDevelopmentMode", true);
+
+                return Ok(new PasswordResetResponseDto
+                {
+                    Success = true,
+                    Message = "Se o email existir em nossa base, você receberá as instruções de recuperação.",
+                    Token = isDevelopment ? resetToken.Token : null
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erro ao processar recuperação de senha");
+                return StatusCode(500, new { message = "Erro ao processar solicitação" });
+            }
+        }
+
+        // POST: api/auth/reset-password
+        [AllowAnonymous]
+        [HttpPost("reset-password")]
+        public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto dto)
+        {
+            try
+            {
+                // Busca o token válido
+                var resetToken = await _passwordResetTokenRepository.GetByTokenAsync(dto.Token);
+
+                if (resetToken == null)
+                {
+                    return BadRequest(new PasswordResetResponseDto
+                    {
+                        Success = false,
+                        Message = "Token inválido ou expirado."
+                    });
+                }
+
+                // Busca o usuário
+                var user = await _userRepository.GetByEmailAsync(resetToken.Email);
+                if (user == null)
+                {
+                    return BadRequest(new PasswordResetResponseDto
+                    {
+                        Success = false,
+                        Message = "Usuário não encontrado."
+                    });
+                }
+
+                // Atualiza a senha
+                user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
+                await _userRepository.UpdateAsync(user);
+
+                // Marca o token como usado
+                resetToken.IsUsed = true;
+                await _passwordResetTokenRepository.UpdateAsync(resetToken);
+
+                _logger.LogInformation("Senha resetada com sucesso para o usuário: {Email}", user.Email);
+
+                return Ok(new PasswordResetResponseDto
+                {
+                    Success = true,
+                    Message = "Senha alterada com sucesso! Você já pode fazer login."
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erro ao resetar senha");
+                return StatusCode(500, new { message = "Erro ao processar solicitação" });
+            }
+        }
+
+        // GET: api/auth/validate-token/{token}
+        [AllowAnonymous]
+        [HttpGet("validate-token/{token}")]
+        public async Task<IActionResult> ValidateResetToken(string token)
+        {
+            var resetToken = await _passwordResetTokenRepository.GetByTokenAsync(token);
+
+            if (resetToken == null)
+            {
+                return Ok(new { valid = false, message = "Token inválido ou expirado" });
+            }
+
+            return Ok(new { valid = true, email = resetToken.Email });
         }
     }
 }

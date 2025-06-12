@@ -4,6 +4,7 @@ using PreSystem.StockControl.Application.Services;
 using PreSystem.StockControl.Domain.Interfaces.Repositories;
 using PreSystem.StockControl.Infrastructure.Persistence;
 using PreSystem.StockControl.Infrastructure.Repositories;
+
 namespace PreSystem.StockControl.WebApi.Configurations
 {
     public static class DependencyInjectionConfiguration
