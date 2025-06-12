@@ -26,7 +26,7 @@ class AuthService {
     // 5. Armazena o userId para uso futuro
     localStorage.setItem('userId', userId);
     
-    // 6. AGORA sim, busca os detalhes do usuário (com o token já configurado)
+    // Busca os detalhes do usuário (com o token já configurado)
     const userResponse = await api.get<User>(`/user/${userId}`);
     const user = userResponse.data;
     
@@ -81,6 +81,14 @@ class AuthService {
     const user = this.getCurrentUser();
     return user?.role === 'admin';
   }
+
+  async forgotPassword(email: string): Promise<void> {
+  await api.post('/auth/forgot-password', { email });
+}
+
+async resetPassword(token: string, newPassword: string): Promise<void> {
+  await api.post('/auth/reset-password', { token, newPassword });
+}
 }
 
 export default new AuthService();
