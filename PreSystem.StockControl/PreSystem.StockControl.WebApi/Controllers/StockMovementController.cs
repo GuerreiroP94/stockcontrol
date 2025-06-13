@@ -47,7 +47,7 @@ namespace PreSystem.StockControl.WebApi.Controllers
 
         // POST: api/StockMovement/bulk (Movimentações em massa)
         [HttpPost("bulk")]
-        [Authorize(Roles = "admin")]
+        [Authorize]
         public async Task<ActionResult<BulkMovementResultDto>> CreateBulkMovements([FromBody] BulkStockMovementDto dto)
         {
             if (dto.Movements == null || !dto.Movements.Any())

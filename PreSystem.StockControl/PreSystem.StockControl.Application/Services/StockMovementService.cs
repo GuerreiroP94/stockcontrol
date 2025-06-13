@@ -87,6 +87,13 @@ namespace PreSystem.StockControl.Application.Services
 
                 // Recupera a movimentação criada com os relacionamentos
                 var createdMovement = await _movementRepository.GetByIdAsync(movement.Id);
+
+                // Validação para evitar null reference
+                if (createdMovement == null)
+                {
+                    throw new InvalidOperationException("Erro ao recuperar movimentação criada");
+                }
+
                 return MapToDto(createdMovement);
             }
             catch (Exception ex)
@@ -108,11 +115,12 @@ namespace PreSystem.StockControl.Application.Services
             if (!string.IsNullOrEmpty(parameters.MovementType))
                 movements = movements.Where(m => m.MovementType == parameters.MovementType);
 
-            if (parameters.FromDate.HasValue)
-                movements = movements.Where(m => m.PerformedAt >= parameters.FromDate.Value);
+            // CORRIGIDO: Usar StartDate e EndDate ao invés de FromDate e ToDate
+            if (parameters.StartDate.HasValue)
+                movements = movements.Where(m => m.PerformedAt >= parameters.StartDate.Value);
 
-            if (parameters.ToDate.HasValue)
-                movements = movements.Where(m => m.PerformedAt <= parameters.ToDate.Value);
+            if (parameters.EndDate.HasValue)
+                movements = movements.Where(m => m.PerformedAt <= parameters.EndDate.Value);
 
             // Ordenação e paginação
             movements = movements

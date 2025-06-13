@@ -1,18 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Check, DollarSign, TrendingDown } from 'lucide-react';
+import { Check, DollarSign, TrendingDown, AlertTriangle } from 'lucide-react';
 import BaseModal from '../common/BaseModal';
 import ConfirmModal from '../common/ConfirmModal';
-import { Component, Product, ProductComponentCreate } from '../../types';
+import { Product, Component } from '../../types';
 import movementsService from '../../services/movements.service';
+import orderingService from '../../services/ordering.service';
 
 interface ExportModalProps {
   isOpen: boolean;
   onClose: () => void;
-  product: Product | { name: string; components: ProductComponentCreate[] };
+  product: Product;
   components: Component[];
   productOrder: number[];
-  onUpdateOrder: (order: number[]) => void;
-  onConfirmExport: (includeValues: boolean, productionQuantity?: number) => void;
+  onUpdateOrder: (newOrder: number[]) => void;
+  onConfirmExport: (includeValues: boolean, productionQuantity: number) => void;
 }
 
 const ExportModal: React.FC<ExportModalProps> = ({
@@ -22,66 +23,23 @@ const ExportModal: React.FC<ExportModalProps> = ({
   components,
   productOrder,
   onUpdateOrder,
-  onConfirmExport
+  onConfirmExport,
 }) => {
   const [includeValues, setIncludeValues] = useState(true);
-  const [orderedComponents, setOrderedComponents] = useState<number[]>([]);
-  const [orderInputs, setOrderInputs] = useState<{ [key: number]: number }>({});
-  const [productionQuantity, setProductionQuantity] = useState(1);
   const [showStockConfirm, setShowStockConfirm] = useState(false);
   const [stockLoading, setStockLoading] = useState(false);
+  const [orderInputs, setOrderInputs] = useState<{ [key: number]: number }>({});
+  const [productionQuantity, setProductionQuantity] = useState(1);
+  const [stockWarnings, setStockWarnings] = useState<string[]>([]);
 
   useEffect(() => {
-    const sortedComponents = orderComponentsAutomatically();
-    setOrderedComponents(sortedComponents);
-    onUpdateOrder(sortedComponents);
-  }, [product, components]);
+    if (isOpen && product) {
+      const inputs = orderingService.createOrderInputsFromArray(productOrder);
+      setOrderInputs(inputs);
+    }
+  }, [isOpen, product, productOrder]);
 
-  const orderComponentsAutomatically = (): number[] => {
-    const productComponents = getProductComponents();
-    
-    const componentsWithInfo = productComponents.map(pc => {
-      const component = components.find(c => c.id === pc.componentId);
-      return {
-        componentId: pc.componentId,
-        order: orderInputs[pc.componentId] || 999,
-        value: component?.value || '',
-        device: component?.device || ''
-      };
-    });
-
-    componentsWithInfo.sort((a, b) => {
-      if (a.order !== b.order) {
-        return a.order - b.order;
-      }
-      
-      const aValueNum = parseFloat(a.value) || 0;
-      const bValueNum = parseFloat(b.value) || 0;
-      if (aValueNum !== bValueNum) {
-        return aValueNum - bValueNum;
-      }
-      
-      return a.device.localeCompare(b.device);
-    });
-
-    return componentsWithInfo.map(c => c.componentId);
-  };
-
-  const handleOrderInputChange = (componentId: number, value: string) => {
-    const numValue = parseInt(value) || 0;
-    setOrderInputs(prev => ({
-      ...prev,
-      [componentId]: numValue
-    }));
-  };
-
-  const handleReorder = () => {
-    const sorted = orderComponentsAutomatically();
-    setOrderedComponents(sorted);
-    onUpdateOrder(sorted);
-  };
-
-  const getComponentDetails = (componentId: number) => {
+  const getComponentDetails = (componentId: number): Component | undefined => {
     return components.find(c => c.id === componentId);
   };
 
@@ -99,8 +57,14 @@ const ExportModal: React.FC<ExportModalProps> = ({
   const handleStockMovement = async () => {
     try {
       setStockLoading(true);
+      setStockWarnings([]);
       
       const productComponents = getProductComponents();
+      
+      // Criar mapa de componentes para acesso rápido
+      const componentMap = new Map(
+        components.map(c => [c.id, c])
+      );
       
       const movements = productComponents.map(comp => ({
         componentId: comp.componentId,
@@ -108,27 +72,82 @@ const ExportModal: React.FC<ExportModalProps> = ({
         quantity: ('quantity' in comp ? comp.quantity : 0) * productionQuantity
       }));
 
-      await movementsService.createBulk({ movements });
+      // Usar o novo método com suporte a baixa parcial
+      const result = await movementsService.createBulkPartial(movements, componentMap);
+      
+      if (result.warnings.length > 0) {
+        // Mostrar avisos em um alert mais elaborado
+        const warningMessage = `ATENÇÃO - Baixa Parcial Realizada:\n\n${result.warnings.join('\n\n')}`;
+        alert(warningMessage);
+        
+        setStockWarnings(result.warnings);
+      } else if (result.success) {
+        alert('Baixa no estoque realizada com sucesso!');
+      }
       
       setShowStockConfirm(false);
-      onClose();
       
-      window.location.reload();
-    } catch (error) {
+      // Só fecha o modal se não houver avisos
+      if (result.warnings.length === 0) {
+        onClose();
+        window.location.reload();
+      }
+    } catch (error: any) {
       console.error('Erro ao dar baixa no estoque:', error);
-      alert('Erro ao dar baixa no estoque. Verifique se há estoque suficiente.');
+      
+      if (error.response?.status === 403) {
+        alert('Você não tem permissão para dar baixa no estoque. Apenas administradores podem realizar esta ação.');
+      } else if (error.response?.data?.message) {
+        alert(`Erro: ${error.response.data.message}`);
+      } else {
+        alert('Erro ao dar baixa no estoque. Tente novamente.');
+      }
     } finally {
       setStockLoading(false);
     }
   };
 
-  const hasInsufficientStock = () => {
+  const getStockStatus = () => {
     const productComponents = getProductComponents();
-    return productComponents.some(pc => {
+    const status = {
+      hasInsufficientStock: false,
+      partialStock: false,
+      details: [] as string[]
+    };
+
+    productComponents.forEach(pc => {
       const component = getComponentDetails(pc.componentId);
-      const quantity = 'quantity' in pc ? pc.quantity : 0;
-      return component && component.quantityInStock < (quantity * productionQuantity);
+      if (component) {
+        const needed = ('quantity' in pc ? pc.quantity : 0) * productionQuantity;
+        const available = component.quantityInStock;
+        
+        if (available === 0 && needed > 0) {
+          status.hasInsufficientStock = true;
+          status.details.push(`${component.name}: Sem estoque (necessário: ${needed})`);
+        } else if (available < needed) {
+          status.partialStock = true;
+          status.details.push(`${component.name}: Estoque parcial (disponível: ${available}, necessário: ${needed})`);
+        }
+      }
     });
+
+    return status;
+  };
+
+  const handleOrderInputChange = (componentId: number, value: string) => {
+    const numValue = parseInt(value) || 0;
+    setOrderInputs(prev => ({
+      ...prev,
+      [componentId]: numValue
+    }));
+  };
+
+  const handleReorder = () => {
+    const newOrder = orderingService.sortByOrderInputs(productOrder, orderInputs);
+    onUpdateOrder(newOrder);
+    
+    const newInputs = orderingService.createOrderInputsFromArray(newOrder);
+    setOrderInputs(newInputs);
   };
 
   const getTotalComponents = () => {
@@ -138,6 +157,8 @@ const ExportModal: React.FC<ExportModalProps> = ({
       return sum + (quantity * productionQuantity);
     }, 0);
   };
+
+  const stockStatus = getStockStatus();
 
   return (
     <BaseModal 
@@ -177,84 +198,103 @@ const ExportModal: React.FC<ExportModalProps> = ({
           </label>
         </div>
 
-        <div className="flex justify-between items-center mb-3">
-          <h3 className="text-sm font-semibold text-gray-700">Ordem dos Componentes</h3>
+        {/* Status do estoque */}
+        {(stockStatus.hasInsufficientStock || stockStatus.partialStock) && (
+          <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="text-yellow-600 mt-0.5" size={16} />
+              <div className="text-sm">
+                <p className="font-medium text-yellow-800 mb-1">
+                  Atenção: Estoque insuficiente para alguns componentes
+                </p>
+                <ul className="text-yellow-700 text-xs space-y-0.5">
+                  {stockStatus.details.map((detail, index) => (
+                    <li key={index}>• {detail}</li>
+                  ))}
+                </ul>
+                <p className="text-yellow-700 text-xs mt-2">
+                  A baixa será realizada apenas com as quantidades disponíveis.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="mb-4">
+          <h3 className="text-sm font-medium text-gray-700 mb-2">Ordem dos Componentes</h3>
+          <div className="border border-gray-200 rounded-lg overflow-hidden">
+            <div className="max-h-64 overflow-y-auto">
+              <table className="w-full text-xs">
+                <thead className="bg-gray-50 sticky top-0">
+                  <tr>
+                    <th className="px-2 py-2 text-left font-medium text-gray-700">ORDEM</th>
+                    <th className="px-2 py-2 text-left font-medium text-gray-700">QTD</th>
+                    <th className="px-2 py-2 text-left font-medium text-gray-700">TOTAL</th>
+                    <th className="px-2 py-2 text-left font-medium text-gray-700">DEVICE</th>
+                    <th className="px-2 py-2 text-left font-medium text-gray-700">VALUE</th>
+                    <th className="px-2 py-2 text-left font-medium text-gray-700">PACKAGE</th>
+                    <th className="px-2 py-2 text-left font-medium text-gray-700">CÓD.</th>
+                    <th className="px-2 py-2 text-left font-medium text-gray-700">GAVETA</th>
+                    <th className="px-2 py-2 text-left font-medium text-gray-700">ESTOQUE</th>
+                    <th className="px-2 py-2 text-left font-medium text-gray-700">COMPRAR</th>
+                    {includeValues && (
+                      <th className="px-2 py-2 text-left font-medium text-gray-700">VALOR</th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {productOrder.map((componentId, index) => {
+                    const productComponent = getProductComponents().find(pc => pc.componentId === componentId);
+                    const component = getComponentDetails(componentId);
+                    
+                    if (!productComponent || !component) return null;
+                    
+                    const quantity = 'quantity' in productComponent ? productComponent.quantity : 0;
+                    const totalNeeded = quantity * productionQuantity;
+                    const needToBuy = Math.max(0, totalNeeded - component.quantityInStock);
+                    
+                    return (
+                      <tr key={componentId} className="hover:bg-gray-50">
+                        <td className="px-2 py-2">
+                          <input
+                            type="number"
+                            value={orderInputs[componentId] || ''}
+                            onChange={(e) => handleOrderInputChange(componentId, e.target.value)}
+                            className="w-12 px-1 py-0.5 text-center border border-gray-300 rounded text-xs"
+                            placeholder={(index + 1).toString()}
+                          />
+                        </td>
+                        <td className="px-2 py-2 text-center">{quantity}</td>
+                        <td className="px-2 py-2 text-center font-medium">{totalNeeded}</td>
+                        <td className="px-2 py-2">{component.device || '-'}</td>
+                        <td className="px-2 py-2">{component.value || '-'}</td>
+                        <td className="px-2 py-2">{component.package || '-'}</td>
+                        <td className="px-2 py-2">INTC{String(componentId).padStart(4, '0')}</td>
+                        <td className="px-2 py-2 text-center">{component.drawer || '-'}</td>
+                        <td className={`px-2 py-2 text-center ${component.quantityInStock < totalNeeded ? 'text-orange-600 font-medium' : ''}`}>
+                          {component.quantityInStock}
+                        </td>
+                        <td className={`px-2 py-2 text-center font-medium ${needToBuy > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                          {needToBuy || '0'}
+                        </td>
+                        {includeValues && (
+                          <td className="px-2 py-2 text-right">
+                            R$ {((component.price || 0) * totalNeeded).toFixed(2)}
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
           <button
             onClick={handleReorder}
-            className="text-sm px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+            className="mt-2 px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
           >
             Reordenar
           </button>
-        </div>
-
-        {/* Tabela de componentes ajustada */}
-        <div className="border border-gray-200 rounded-lg overflow-hidden">
-          <div className="max-h-80 overflow-y-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50 sticky top-0 z-10">
-                <tr>
-                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase w-16">Ordem</th>
-                  <th className="px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase w-12">Qtd</th>
-                  <th className="px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase w-14">Total</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Device</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Value</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Package</th>
-                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase">Cód.</th>
-                  <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase w-16">Gaveta</th>
-                  <th className="px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase w-16">Estoque</th>
-                  <th className="px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase w-16">Comprar</th>
-                  {includeValues && (
-                    <th className="px-2 py-2 text-right text-xs font-medium text-gray-500 uppercase w-20">Valor</th>
-                  )}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200 bg-white">
-                {orderedComponents.map((compId, index) => {
-                  const productComponents = getProductComponents();
-                  const pc = productComponents.find((c: any) => c.componentId === compId);
-                  if (!pc) return null;
-                  
-                  const component = getComponentDetails(pc.componentId);
-                  if (!component) return null;
-
-                  const quantity = 'quantity' in pc ? pc.quantity : 0;
-                  const totalNeeded = quantity * productionQuantity;
-                  const needToBuy = Math.max(0, totalNeeded - component.quantityInStock);
-
-                  return (
-                    <tr key={compId} className="hover:bg-gray-50">
-                      <td className="px-2 py-2">
-                        <input
-                          type="number"
-                          value={orderInputs[compId] || ''}
-                          onChange={(e) => handleOrderInputChange(compId, e.target.value)}
-                          className="w-12 px-1 py-0.5 text-xs text-center border rounded"
-                          min="1"
-                          placeholder={String(index + 1)}
-                        />
-                      </td>
-                      <td className="px-2 py-2 text-xs text-center">{quantity}</td>
-                      <td className="px-2 py-2 text-xs font-medium text-center">{totalNeeded}</td>
-                      <td className="px-3 py-2 text-xs truncate max-w-[100px]" title={component.device || '-'}>{component.device || '-'}</td>
-                      <td className="px-3 py-2 text-xs font-medium truncate max-w-[100px]" title={component.value || '-'}>{component.value || '-'}</td>
-                      <td className="px-3 py-2 text-xs truncate max-w-[80px]" title={component.package || '-'}>{component.package || '-'}</td>
-                      <td className="px-2 py-2 text-xs truncate max-w-[80px]" title={component.internalCode || '-'}>{component.internalCode || '-'}</td>
-                      <td className="px-2 py-2 text-xs">{component.drawer || '-'}</td>
-                      <td className="px-2 py-2 text-xs text-center">{component.quantityInStock}</td>
-                      <td className={`px-2 py-2 text-xs text-center font-medium ${needToBuy > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        {needToBuy || '0'}
-                      </td>
-                      {includeValues && (
-                        <td className="px-2 py-2 text-xs text-right">
-                          R$ {((component.price || 0) * totalNeeded).toFixed(2)}
-                        </td>
-                      )}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
         </div>
 
         <div className="mt-3 p-3 bg-gray-50 rounded text-xs text-gray-600">
@@ -265,18 +305,25 @@ const ExportModal: React.FC<ExportModalProps> = ({
             <li><strong>Device</strong> (ordem alfabética A-Z)</li>
           </ol>
         </div>
+
+        {/* Avisos de baixa parcial */}
+        {stockWarnings.length > 0 && (
+          <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+            <h4 className="text-sm font-medium text-red-800 mb-2">Resultado da Baixa:</h4>
+            <ul className="text-xs text-red-700 space-y-1">
+              {stockWarnings.map((warning, index) => (
+                <li key={index}>• {warning}</li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
 
       <div className="p-4 border-t border-gray-200 flex justify-between">
         <button
           onClick={() => setShowStockConfirm(true)}
-          className={`flex items-center gap-2 px-3 py-1.5 text-sm rounded ${
-            hasInsufficientStock() 
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-              : 'bg-red-600 text-white hover:bg-red-700'
-          }`}
-          disabled={hasInsufficientStock()}
-          title={hasInsufficientStock() ? 'Estoque insuficiente' : 'Dar baixa no estoque'}
+          className="flex items-center gap-2 px-3 py-1.5 text-sm rounded bg-red-600 text-white hover:bg-red-700"
+          title="Dar baixa no estoque (aceita baixa parcial)"
         >
           <TrendingDown size={16} />
           Dar Baixa no Estoque
@@ -304,7 +351,11 @@ const ExportModal: React.FC<ExportModalProps> = ({
         onClose={() => setShowStockConfirm(false)}
         onConfirm={handleStockMovement}
         title="Confirmar Baixa no Estoque"
-        message={`Tem certeza que deseja dar baixa no estoque de ${getTotalComponents()} componentes para produzir ${productionQuantity} unidade(s) de "${product.name}"?`}
+        message={
+          stockStatus.hasInsufficientStock || stockStatus.partialStock
+            ? `Alguns componentes não têm estoque suficiente. A baixa será realizada apenas com as quantidades disponíveis. Deseja continuar?`
+            : `Tem certeza que deseja dar baixa no estoque de ${getTotalComponents()} componentes para produzir ${productionQuantity} unidade(s) de "${product.name}"?`
+        }
         confirmText="Confirmar Baixa"
         type="warning"
         isLoading={stockLoading}
