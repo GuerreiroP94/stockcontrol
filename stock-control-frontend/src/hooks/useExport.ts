@@ -45,7 +45,12 @@ export const useExport = (): UseExportReturn => {
     try {
       setIsExporting(true);
       setExportError(null);
-      await exportService.exportComponentsFiltered(components, filters, filename);
+      // Usar o método correto que existe no exportService
+      await exportService.exportComponentsWithColumnFilter(
+        components, 
+        filters instanceof Set ? filters : new Set(['id', 'name', 'group', 'device', 'value', 'package']), 
+        filename
+      );
     } catch (error) {
       setExportError('Erro ao exportar componentes filtrados');
       console.error('Export error:', error);
