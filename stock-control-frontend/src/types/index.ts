@@ -255,6 +255,7 @@ export interface CrossExportData {
 export interface MergedComponent {
   componentId: number;
   componentName: string;
+  group: string; // Adicione esta linha
   device?: string;
   value?: string;
   package?: string;

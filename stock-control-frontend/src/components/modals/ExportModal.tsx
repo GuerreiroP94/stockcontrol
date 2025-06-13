@@ -86,135 +86,89 @@ const ExportModal: React.FC<ExportModalProps> = ({
       }
       
       setShowStockConfirm(false);
-      
-      // Só fecha o modal se não houver avisos
-      if (result.warnings.length === 0) {
-        onClose();
-        window.location.reload();
-      }
-    } catch (error: any) {
+      onClose();
+    } catch (error) {
       console.error('Erro ao dar baixa no estoque:', error);
-      
-      if (error.response?.status === 403) {
-        alert('Você não tem permissão para dar baixa no estoque. Apenas administradores podem realizar esta ação.');
-      } else if (error.response?.data?.message) {
-        alert(`Erro: ${error.response.data.message}`);
-      } else {
-        alert('Erro ao dar baixa no estoque. Tente novamente.');
-      }
+      alert('Erro ao processar baixa no estoque');
     } finally {
       setStockLoading(false);
     }
   };
 
-  const getStockStatus = () => {
-    const productComponents = getProductComponents();
-    const status = {
-      hasInsufficientStock: false,
-      partialStock: false,
-      details: [] as string[]
-    };
-
-    productComponents.forEach(pc => {
-      const component = getComponentDetails(pc.componentId);
-      if (component) {
-        const needed = ('quantity' in pc ? pc.quantity : 0) * productionQuantity;
-        const available = component.quantityInStock;
-        
-        if (available === 0 && needed > 0) {
-          status.hasInsufficientStock = true;
-          status.details.push(`${component.name}: Sem estoque (necessário: ${needed})`);
-        } else if (available < needed) {
-          status.partialStock = true;
-          status.details.push(`${component.name}: Estoque parcial (disponível: ${available}, necessário: ${needed})`);
-        }
-      }
-    });
-
-    return status;
-  };
-
-  const handleOrderInputChange = (componentId: number, value: string) => {
-    const numValue = parseInt(value) || 0;
-    setOrderInputs(prev => ({
-      ...prev,
-      [componentId]: numValue
-    }));
-  };
-
-  const handleReorder = () => {
-    const newOrder = orderingService.sortByOrderInputs(productOrder, orderInputs);
-    onUpdateOrder(newOrder);
+  const handleOrderChange = (componentId: number, newOrder: number) => {
+    const validOrder = Math.max(1, Math.min(productOrder.length, newOrder));
+    const newOrderInputs = orderingService.updateComponentOrder(
+      orderInputs,
+      componentId,
+      validOrder,
+      productOrder
+    );
     
-    const newInputs = orderingService.createOrderInputsFromArray(newOrder);
-    setOrderInputs(newInputs);
+    setOrderInputs(newOrderInputs);
+    const newOrderArray = orderingService.getSortedComponentIds(newOrderInputs);
+    onUpdateOrder(newOrderArray);
   };
 
   const getTotalComponents = () => {
-    const productComponents = getProductComponents();
-    return productComponents.reduce((sum, pc) => {
-      const quantity = 'quantity' in pc ? pc.quantity : 0;
-      return sum + (quantity * productionQuantity);
-    }, 0);
+    return productOrder.length;
   };
 
-  const stockStatus = getStockStatus();
-
   return (
-    <BaseModal 
-      isOpen={isOpen} 
+    <BaseModal
+      isOpen={isOpen}
       onClose={onClose}
-      title={`Exportar: ${product.name}`}
-      size="lg"
+      title={`Exportar: ${product?.name || 'Produto'}`}
+      size="xl"
     >
-      <div className="p-4">
-        <p className="text-sm text-gray-500 mb-3">Configure as opções de exportação</p>
-        
-        <div className="flex items-center gap-4 mb-4">
-          <label className="text-sm font-medium text-gray-700 whitespace-nowrap">
-            Quantidade a produzir:
+      <div className="space-y-4">
+        {/* Quantidade de Produção */}
+        <div className="bg-gray-50 p-4 rounded-lg">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Quantidade a Produzir
           </label>
           <input
             type="number"
+            min="1"
             value={productionQuantity}
             onChange={(e) => setProductionQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-            className="w-20 px-2 py-1 text-center border border-gray-300 rounded focus:border-blue-500"
-            min="1"
+            className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
-        
-        <div className="mb-4">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={includeValues}
-              onChange={(e) => setIncludeValues(e.target.checked)}
-              className="w-4 h-4 text-blue-600 rounded"
-            />
-            <span className="text-sm text-gray-700 flex items-center gap-1">
-              <DollarSign size={16} />
+
+        {/* Opção de incluir valores */}
+        <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
+          <button
+            onClick={() => setIncludeValues(!includeValues)}
+            className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+              includeValues 
+                ? 'bg-blue-600 border-blue-600' 
+                : 'bg-white border-gray-300 hover:border-gray-400'
+            }`}
+          >
+            {includeValues && <Check size={12} className="text-white" />}
+          </button>
+          <div className="flex-1">
+            <label className="text-sm font-medium text-gray-700 cursor-pointer">
               Incluir valores (R$)?
-            </span>
-          </label>
+            </label>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Marque para incluir os preços dos componentes no relatório
+            </p>
+          </div>
         </div>
 
-        {/* Status do estoque */}
-        {(stockStatus.hasInsufficientStock || stockStatus.partialStock) && (
-          <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <div className="flex items-start gap-2">
-              <AlertTriangle className="text-yellow-600 mt-0.5" size={16} />
-              <div className="text-sm">
-                <p className="font-medium text-yellow-800 mb-1">
-                  Atenção: Estoque insuficiente para alguns componentes
-                </p>
-                <ul className="text-yellow-700 text-xs space-y-0.5">
-                  {stockStatus.details.map((detail, index) => (
-                    <li key={index}>• {detail}</li>
+        {/* Avisos de estoque baixo */}
+        {stockWarnings.length > 0 && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="text-yellow-600 flex-shrink-0 mt-0.5" size={20} />
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-yellow-800">Avisos de Estoque</p>
+                <div className="text-xs text-yellow-700 space-y-1">
+                  {stockWarnings.map((warning, index) => (
+                    <p key={index}>{warning}</p>
                   ))}
-                </ul>
-                <p className="text-yellow-700 text-xs mt-2">
-                  A baixa será realizada apenas com as quantidades disponíveis.
-                </p>
+                </div>
               </div>
             </div>
           </div>
@@ -230,10 +184,10 @@ const ExportModal: React.FC<ExportModalProps> = ({
                     <th className="px-2 py-2 text-left font-medium text-gray-700">ORDEM</th>
                     <th className="px-2 py-2 text-left font-medium text-gray-700">QTD</th>
                     <th className="px-2 py-2 text-left font-medium text-gray-700">TOTAL</th>
+                    <th className="px-2 py-2 text-left font-medium text-gray-700">GRUPO</th>
                     <th className="px-2 py-2 text-left font-medium text-gray-700">DEVICE</th>
                     <th className="px-2 py-2 text-left font-medium text-gray-700">VALUE</th>
                     <th className="px-2 py-2 text-left font-medium text-gray-700">PACKAGE</th>
-                    <th className="px-2 py-2 text-left font-medium text-gray-700">CÓD.</th>
                     <th className="px-2 py-2 text-left font-medium text-gray-700">GAVETA</th>
                     <th className="px-2 py-2 text-left font-medium text-gray-700">ESTOQUE</th>
                     <th className="px-2 py-2 text-left font-medium text-gray-700">COMPRAR</th>
@@ -250,36 +204,43 @@ const ExportModal: React.FC<ExportModalProps> = ({
                     if (!productComponent || !component) return null;
                     
                     const quantity = 'quantity' in productComponent ? productComponent.quantity : 0;
-                    const totalNeeded = quantity * productionQuantity;
-                    const needToBuy = Math.max(0, totalNeeded - component.quantityInStock);
+                    const totalQuantity = quantity * productionQuantity;
+                    const needToBuy = Math.max(0, totalQuantity - component.quantityInStock);
                     
                     return (
                       <tr key={componentId} className="hover:bg-gray-50">
                         <td className="px-2 py-2">
                           <input
                             type="number"
-                            value={orderInputs[componentId] || ''}
-                            onChange={(e) => handleOrderInputChange(componentId, e.target.value)}
-                            className="w-12 px-1 py-0.5 text-center border border-gray-300 rounded text-xs"
-                            placeholder={(index + 1).toString()}
+                            min="1"
+                            max={getTotalComponents()}
+                            value={orderInputs[componentId] || index + 1}
+                            onChange={(e) => handleOrderChange(componentId, parseInt(e.target.value) || 1)}
+                            className="w-12 px-1 py-0.5 text-center border border-gray-300 rounded"
                           />
                         </td>
                         <td className="px-2 py-2 text-center">{quantity}</td>
-                        <td className="px-2 py-2 text-center font-medium">{totalNeeded}</td>
+                        <td className="px-2 py-2 text-center font-medium">{totalQuantity}</td>
+                        <td className="px-2 py-2">{component.group}</td>
                         <td className="px-2 py-2">{component.device || '-'}</td>
-                        <td className="px-2 py-2">{component.value || '-'}</td>
-                        <td className="px-2 py-2">{component.package || '-'}</td>
-                        <td className="px-2 py-2">INTC{String(componentId).padStart(4, '0')}</td>
-                        <td className="px-2 py-2 text-center">{component.drawer || '-'}</td>
-                        <td className={`px-2 py-2 text-center ${component.quantityInStock < totalNeeded ? 'text-orange-600 font-medium' : ''}`}>
-                          {component.quantityInStock}
+                        <td className="px-2 py-2 text-xs">{component.value || '-'}</td>
+                        <td className="px-2 py-2 text-xs">{component.package || '-'}</td>
+                        <td className="px-2 py-2 text-xs">{component.drawer || '-'}</td>
+                        <td className="px-2 py-2 text-center">
+                          <span className={`font-medium ${
+                            component.quantityInStock < totalQuantity ? 'text-red-600' : 'text-green-600'
+                          }`}>
+                            {component.quantityInStock}
+                          </span>
                         </td>
-                        <td className={`px-2 py-2 text-center font-medium ${needToBuy > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                          {needToBuy || '0'}
+                        <td className="px-2 py-2 text-center">
+                          {needToBuy > 0 && (
+                            <span className="text-orange-600 font-medium">{needToBuy}</span>
+                          )}
                         </td>
                         {includeValues && (
-                          <td className="px-2 py-2 text-right">
-                            R$ {((component.price || 0) * totalNeeded).toFixed(2)}
+                          <td className="px-2 py-2 text-right font-medium">
+                            R$ {((component.price || 0) * totalQuantity).toFixed(2)}
                           </td>
                         )}
                       </tr>
@@ -289,70 +250,43 @@ const ExportModal: React.FC<ExportModalProps> = ({
               </table>
             </div>
           </div>
-          <button
-            onClick={handleReorder}
-            className="mt-2 px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
-          >
-            Reordenar
-          </button>
         </div>
 
-        <div className="mt-3 p-3 bg-gray-50 rounded text-xs text-gray-600">
-          <p className="font-semibold mb-1">Ordem automática:</p>
-          <ol className="list-decimal list-inside space-y-0.5">
-            <li><strong>Ordem manual</strong> (campo "Ordem")</li>
-            <li><strong>Value</strong> (ordem numérica crescente)</li>
-            <li><strong>Device</strong> (ordem alfabética A-Z)</li>
-          </ol>
-        </div>
-
-        {/* Avisos de baixa parcial */}
-        {stockWarnings.length > 0 && (
-          <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-            <h4 className="text-sm font-medium text-red-800 mb-2">Resultado da Baixa:</h4>
-            <ul className="text-xs text-red-700 space-y-1">
-              {stockWarnings.map((warning, index) => (
-                <li key={index}>• {warning}</li>
-              ))}
-            </ul>
+        {/* Ações */}
+        <div className="flex justify-between pt-4 border-t">
+          <div className="flex gap-2">
+            <button
+              onClick={handleConfirm}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+            >
+              <DollarSign size={18} />
+              Exportar Excel
+            </button>
+            <button
+              onClick={() => setShowStockConfirm(true)}
+              className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors flex items-center gap-2"
+            >
+              <TrendingDown size={18} />
+              Dar Baixa no Estoque
+            </button>
           </div>
-        )}
-      </div>
-
-      <div className="p-4 border-t border-gray-200 flex justify-between">
-        <button
-          onClick={() => setShowStockConfirm(true)}
-          className="flex items-center gap-2 px-3 py-1.5 text-sm rounded bg-red-600 text-white hover:bg-red-700"
-          title="Dar baixa no estoque (aceita baixa parcial)"
-        >
-          <TrendingDown size={16} />
-          Dar Baixa no Estoque
-        </button>
-        
-        <div className="flex gap-2">
           <button
             onClick={onClose}
-            className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded"
+            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
           >
             Cancelar
           </button>
-          <button
-            onClick={handleConfirm}
-            className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-600 text-white rounded hover:bg-purple-700"
-          >
-            <Check size={16} />
-            Exportar
-          </button>
         </div>
       </div>
 
+      {/* Modal de confirmação de baixa */}
       <ConfirmModal
         isOpen={showStockConfirm}
         onClose={() => setShowStockConfirm(false)}
         onConfirm={handleStockMovement}
         title="Confirmar Baixa no Estoque"
         message={
-          stockStatus.hasInsufficientStock || stockStatus.partialStock
+          stockWarnings.length > 0
             ? `Alguns componentes não têm estoque suficiente. A baixa será realizada apenas com as quantidades disponíveis. Deseja continuar?`
             : `Tem certeza que deseja dar baixa no estoque de ${getTotalComponents()} componentes para produzir ${productionQuantity} unidade(s) de "${product.name}"?`
         }

@@ -3,6 +3,8 @@ import { AlertCircle, ChevronRight, Package } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { StockAlert } from '../../types';
 import { formatDateTime } from '../../utils/helpers';
+import componentsService from '../../services/components.service';
+import { Component } from '../../types';
 
 interface AlertsListProps {
   alerts: StockAlert[];
@@ -13,6 +15,47 @@ interface AlertsListProps {
 const AlertsList: React.FC<AlertsListProps> = ({ alerts, loading = false, limit = 5 }) => {
   const navigate = useNavigate();
   const displayAlerts = limit ? alerts.slice(0, limit) : alerts;
+  const [components, setComponents] = React.useState<Component[]>([]);
+
+  React.useEffect(() => {
+    // Buscar informações dos componentes
+    const fetchComponents = async () => {
+      try {
+        const data = await componentsService.getAll();
+        setComponents(data);
+      } catch (error) {
+        console.error('Erro ao buscar componentes:', error);
+      }
+    };
+    
+    if (alerts.length > 0) {
+      fetchComponents();
+    }
+  }, [alerts]);
+
+  const getComponentInfo = (componentId: number) => {
+    const component = components.find(c => c.id === componentId);
+    if (!component) return null;
+    
+    const parts = [];
+    if (component.group) parts.push(component.group);
+    if (component.device) parts.push(component.device);
+    if (component.value) parts.push(component.value);
+    if (component.package) parts.push(component.package);
+    
+    return parts.join(' - ');
+  };
+
+  const getAlertMessage = (alert: StockAlert) => {
+    const componentInfo = getComponentInfo(alert.componentId);
+    const isCritical = alert.message.toLowerCase().includes('crítico');
+    
+    if (componentInfo) {
+      return `${isCritical ? 'Estoque crítico' : 'Estoque baixo'}: ${componentInfo}`;
+    }
+    
+    return alert.message;
+  };
 
   if (loading) {
     return (
@@ -63,7 +106,7 @@ const AlertsList: React.FC<AlertsListProps> = ({ alerts, loading = false, limit 
                 className="p-4 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors cursor-pointer"
                 onClick={() => navigate(`/components`)}
               >
-                <p className="text-sm font-medium text-red-800">{alert.message}</p>
+                <p className="text-sm font-medium text-red-800">{getAlertMessage(alert)}</p>
                 <p className="text-xs text-red-600 mt-1">{formatDateTime(alert.createdAt)}</p>
               </div>
             ))}

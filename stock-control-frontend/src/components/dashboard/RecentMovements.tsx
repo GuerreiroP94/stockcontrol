@@ -3,6 +3,8 @@ import { TrendingUp, TrendingDown, ChevronRight, Package } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { StockMovement } from '../../types';
 import { formatDateTime } from '../../utils/helpers';
+import componentsService from '../../services/components.service';
+import { Component } from '../../types';
 
 interface RecentMovementsProps {
   movements: StockMovement[];
@@ -13,6 +15,36 @@ interface RecentMovementsProps {
 const RecentMovements: React.FC<RecentMovementsProps> = ({ movements, loading = false, limit = 5 }) => {
   const navigate = useNavigate();
   const displayMovements = limit ? movements.slice(0, limit) : movements;
+  const [components, setComponents] = React.useState<Component[]>([]);
+
+  React.useEffect(() => {
+    // Buscar informações dos componentes
+    const fetchComponents = async () => {
+      try {
+        const data = await componentsService.getAll();
+        setComponents(data);
+      } catch (error) {
+        console.error('Erro ao buscar componentes:', error);
+      }
+    };
+    
+    if (movements.length > 0) {
+      fetchComponents();
+    }
+  }, [movements]);
+
+  const getComponentInfo = (componentId: number) => {
+    const component = components.find(c => c.id === componentId);
+    if (!component) return `#${componentId}`;
+    
+    const parts = [];
+    if (component.group) parts.push(component.group);
+    if (component.device) parts.push(component.device);
+    if (component.value) parts.push(component.value);
+    if (component.package) parts.push(`(${component.package})`);
+    
+    return parts.join(' - ');
+  };
 
   if (loading) {
     return (
@@ -77,7 +109,7 @@ const RecentMovements: React.FC<RecentMovementsProps> = ({ movements, loading = 
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-800">
-                      Componente #{movement.componentId}
+                      {getComponentInfo(movement.componentId)}
                     </p>
                     <p className="text-xs text-gray-500">
                       Por {movement.performedBy} • {formatDateTime(movement.movementDate)}

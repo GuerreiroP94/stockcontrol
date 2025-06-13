@@ -1,410 +1,338 @@
 import * as XLSX from 'xlsx';
-import { Component, Product } from '../types';
-
-// Função auxiliar para calcular largura ideal da coluna baseado no conteúdo
-function calculateColumnWidth(data: any[], key: string, minWidth: number = 10): number {
-  const maxLength = Math.max(
-    key.length, // Tamanho do header
-    ...data.map(row => String(row[key] || '').length)
-  );
-  return Math.min(Math.max(maxLength + 2, minWidth), 50); // +2 para padding, máximo 50
-}
-
-// Função auxiliar para aplicar estilo de destaque
-function applyHighlightStyle(ws: XLSX.WorkSheet, colIndex: number, condition: (value: any) => boolean) {
-  const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
-  
-  for (let row = 1; row <= range.e.r; row++) { // Começar da linha 1 (pular header)
-    const cellAddress = XLSX.utils.encode_cell({ r: row, c: colIndex });
-    const cell = ws[cellAddress];
-    
-    if (cell && condition(cell.v)) {
-      if (!cell.s) cell.s = {};
-      cell.s.fill = { fgColor: { rgb: "FFE6E6" } };
-      cell.s.font = { color: { rgb: "FF0000" }, bold: true };
-    }
-  }
-}
+import { Component, Product, MergedComponent, AlertedComponent } from '../types';
+import { formatCurrency } from '../utils/helpers';
 
 class ExportService {
-  /**
-   * Exporta componentes selecionados para Excel
-   */
-  exportComponentsToExcel(components: Component[], filename?: string) {
+  // Exportar lista de componentes
+  exportComponents(components: Component[], filename: string = 'componentes.xlsx') {
+    const wb = XLSX.utils.book_new();
+    
     const data = components.map(comp => ({
       'ID': comp.id,
-      'Nome': comp.name,
       'Grupo': comp.group,
       'Device': comp.device || '',
       'Value': comp.value || '',
       'Package': comp.package || '',
-      'Características': comp.characteristics || '',
+      'Cód. Interno': comp.internalCode || '',
+      'Descrição': comp.description || '',
       'Qtd. Estoque': comp.quantityInStock,
       'Qtd. Mínima': comp.minimumQuantity,
-      'Preço Unit.': comp.price ? `R$ ${comp.price.toFixed(2)}` : '',
-      'Ambiente': comp.environment || '',
+      'Preço Unit.': formatCurrency(comp.price || 0),
+      'Ambiente': comp.environment === 'laboratorio' ? 'Laboratório' : 'Estoque',
       'Gaveta': comp.drawer || '',
       'Divisão': comp.division || '',
       'NCM': comp.ncm || '',
-      'NVE': comp.nve || ''
+      'NVE': comp.nve || '',
+      'Características': comp.characteristics || ''
     }));
-
+    
     const ws = XLSX.utils.json_to_sheet(data);
     
-    // Ajustar largura das colunas baseado no conteúdo
-    const columns = Object.keys(data[0] || {});
-    ws['!cols'] = columns.map(col => ({
-      wch: calculateColumnWidth(data, col)
-    }));
-
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Componentes');
+    // Configurar larguras das colunas
+    ws['!cols'] = [
+      { wch: 8 },   // ID
+      { wch: 15 },  // Grupo
+      { wch: 20 },  // Device
+      { wch: 15 },  // Value
+      { wch: 12 },  // Package
+      { wch: 15 },  // Cód. Interno
+      { wch: 30 },  // Descrição
+      { wch: 12 },  // Qtd. Estoque
+      { wch: 12 },  // Qtd. Mínima
+      { wch: 12 },  // Preço Unit.
+      { wch: 12 },  // Ambiente
+      { wch: 10 },  // Gaveta
+      { wch: 10 },  // Divisão
+      { wch: 15 },  // NCM
+      { wch: 15 },  // NVE
+      { wch: 30 }   // Características
+    ];
     
-    const exportFilename = filename || `componentes_${new Date().toISOString().split('T')[0]}.xlsx`;
-    XLSX.writeFile(wb, exportFilename);
+    XLSX.utils.book_append_sheet(wb, ws, 'Componentes');
+    XLSX.writeFile(wb, filename);
   }
 
-  /**
-   * Exporta produto com ordem customizada - CORRIGIDO
-   */
+  // Exportar produto com ordem customizada
   exportProductWithCustomOrder(
-    product: Product,
-    components: Component[],
-    componentOrder: number[],
+    product: Product, 
+    components: Component[], 
+    customOrder: number[],
     productionQuantity: number = 1,
     includeValues: boolean = true
   ) {
-    // Criar mapa de componentes para acesso rápido
-    const componentMap = new Map(components.map(c => [c.id, c]));
-    
-    // Organizar componentes na ordem especificada
-    const orderedComponents = componentOrder
-      .map(id => {
-        const productComp = product.components.find(pc => pc.componentId === id);
-        const component = componentMap.get(id);
-        return { productComp, component };
-      })
-      .filter(item => item.productComp && item.component);
-
-    // Preparar dados para exportação - REMOVIDAS colunas ORDEM e TOTAL
-    const data: any[] = [];
-    let totalValue = 0;
-
-    orderedComponents.forEach((item) => {
-      const { productComp, component } = item;
-      const quantity = productComp!.quantity * productionQuantity;
-      const unitPrice = component!.price || 0;
-      const totalPrice = quantity * unitPrice;
-      totalValue += totalPrice;
-
-      const row: any = {
-        'QTD': productComp!.quantity,
-        'DEVICE': component!.device || '',
-        'VALUE': component!.value || '',
-        'PACKAGE': component!.package || '',
-        'CÓD.': `INTC${String(component!.id).padStart(4, '0')}`,
-        'GAVETA': component!.drawer || '',
-        'ESTOQUE': component!.quantityInStock,
-        'COMPRAR': Math.max(0, quantity - component!.quantityInStock)
-      };
-
-      if (includeValues) {
-        row['VALOR UNIT.'] = `R$ ${unitPrice.toFixed(2)}`;
-        row['VALOR TOTAL'] = `R$ ${totalPrice.toFixed(2)}`;
-      }
-
-      data.push(row);
-    });
-
-    // Adicionar linha de total se incluir valores
-    if (includeValues && data.length > 0) {
-      data.push({});
-      data.push({
-        'QTD': '',
-        'DEVICE': 'TOTAL GERAL',
-        'VALUE': '',
-        'PACKAGE': '',
-        'CÓD.': '',
-        'GAVETA': '',
-        'ESTOQUE': '',
-        'COMPRAR': '',
-        'VALOR UNIT.': '',
-        'VALOR TOTAL': `R$ ${totalValue.toFixed(2)}`
-      });
-    }
-
-    // Criar planilha
-    const ws = XLSX.utils.json_to_sheet(data);
-    
-    // Configurar largura das colunas baseado no conteúdo
-    const columns = Object.keys(data[0] || {});
-    ws['!cols'] = columns.map(col => ({
-      wch: calculateColumnWidth(data, col)
-    }));
-
-    // Aplicar estilo de destaque na coluna COMPRAR
-    const comprarColIndex = columns.indexOf('COMPRAR');
-    if (comprarColIndex !== -1) {
-      applyHighlightStyle(ws, comprarColIndex, (value) => {
-        const num = parseInt(value);
-        return !isNaN(num) && num > 0;
-      });
-    }
-
-    // Criar workbook
     const wb = XLSX.utils.book_new();
     
-    // Adicionar informações do produto como cabeçalho
-    const headerWs = XLSX.utils.aoa_to_sheet([
-      [`RELATÓRIO DE PRODUÇÃO - ${product.name}`],
-      [`Unidades a Fabricar: ${productionQuantity}`],
-      [''],
-    ]);
-    
-    // Mesclar células do título
-    headerWs['!merges'] = [
-      { s: { r: 0, c: 0 }, e: { r: 0, c: includeValues ? 9 : 7 } },
-      { s: { r: 1, c: 0 }, e: { r: 1, c: includeValues ? 9 : 7 } }
-    ];
-
-    // Adicionar dados ao header
-    XLSX.utils.sheet_add_json(headerWs, data, { origin: 'A4' });
-    
-    // Copiar larguras de coluna
-    headerWs['!cols'] = ws['!cols'];
-    
-    // Aplicar estilo na coluna COMPRAR no header worksheet também
-    if (comprarColIndex !== -1) {
-      applyHighlightStyle(headerWs, comprarColIndex, (value) => {
-        const num = parseInt(value);
-        return !isNaN(num) && num > 0;
-      });
-    }
-    
-    XLSX.utils.book_append_sheet(wb, headerWs, 'Produção');
-    
-    const filename = `RELATORIO_DE_PRODUCAO_${product.name}_${new Date().toISOString().split('T')[0]}.xlsx`;
-    XLSX.writeFile(wb, filename);
-  }
-
-  /**
-   * Exporta múltiplos produtos (exportação cruzada) - CORRIGIDO
-   */
-  exportCrossProducts(
-    selectedProducts: Product[],
-    components: Component[],
-    productQuantities: { [productId: number]: number },
-    mergedComponents: any[],
-    componentOrder: number[],
-    includeValues: boolean = true
-  ) {
-    // Criar mapa de componentes
-    const componentMap = new Map(components.map(c => [c.id, c]));
-    
-    // Preparar dados seguindo a ordem especificada - REMOVIDA coluna Código Interno
-    const data: any[] = [];
-    let totalValue = 0;
-
-    componentOrder.forEach((componentId) => {
-      const merged = mergedComponents.find(m => m.componentId === componentId);
-      if (!merged) return;
+    // Criar dados ordenados
+    const orderedData = customOrder.map((componentId, index) => {
+      const productComponent = product.components.find(pc => pc.componentId === componentId);
+      const component = components.find(c => c.id === componentId);
       
-      const component = componentMap.get(componentId);
-      if (!component) return;
-
-      const unitPrice = component.price || 0;
-      const totalPrice = merged.totalQuantity * unitPrice;
-      totalValue += totalPrice;
-
-      // Listar produtos que usam este componente
-      const productsList = merged.products
-        .map((p: any) => `${productQuantities[p.productId]} ${p.productName}`)
-        .join(', ');
-
+      if (!productComponent || !component) return null;
+      
+      const quantity = productComponent.quantity * productionQuantity;
+      const needToBuy = Math.max(0, quantity - component.quantityInStock);
+      
       const row: any = {
-        'Qtd Utilizada': merged.totalUsage || merged.totalQuantity,
-        'Qtd. Total': merged.totalQuantity,
-        'Device': component.device || '',
-        'Value': component.value || '',
-        'Package': component.package || '',
-        'Características': component.characteristics || '',
-        'Gaveta': component.drawer || '',
-        'Divisão': component.division || '',
-        'Qtd. Estoque': component.quantityInStock,
-        'Qtd. Comprar': Math.max(0, merged.totalQuantity - component.quantityInStock),
-        'Produtos': productsList
+        'ORDEM': index + 1,
+        'QTD': productComponent.quantity,
+        'TOTAL': quantity,
+        'GRUPO': component.group || '',
+        'DEVICE': component.device || '',
+        'VALUE': component.value || '',
+        'PACKAGE': component.package || '',
+        'GAVETA': component.drawer || '',
+        'ESTOQUE': component.quantityInStock,
+        'COMPRAR': needToBuy > 0 ? needToBuy : 0
       };
-
+      
       if (includeValues) {
-        row['Preço Total'] = `R$ ${totalPrice.toFixed(2)}`;
+        row['VALOR'] = `R$ ${((component.price || 0) * quantity).toFixed(2).replace('.', ',')}`;
       }
-
-      data.push(row);
-    });
-
-    // Adicionar total se incluir valores
-    if (includeValues && data.length > 0) {
-      data.push({});
-      data.push({
-        'Qtd Utilizada': '',
-        'Qtd. Total': 'TOTAL GERAL',
-        'Device': '',
-        'Value': '',
-        'Package': '',
-        'Características': '',
-        'Gaveta': '',
-        'Divisão': '',
-        'Qtd. Estoque': '',
-        'Qtd. Comprar': '',
-        'Produtos': '',
-        'Preço Total': `R$ ${totalValue.toFixed(2)}`
-      });
-    }
-
-    // Criar planilha
-    const ws = XLSX.utils.json_to_sheet(data);
-    
-    // Configurar larguras baseado no conteúdo
-    const columns = Object.keys(data[0] || {});
-    ws['!cols'] = columns.map(col => ({
-      wch: calculateColumnWidth(data, col)
-    }));
-
-    // Aplicar estilo de destaque na coluna Qtd. Comprar
-    const qtdComprarColIndex = columns.indexOf('Qtd. Comprar');
-    if (qtdComprarColIndex !== -1) {
-      applyHighlightStyle(ws, qtdComprarColIndex, (value) => {
-        const num = parseInt(value);
-        return !isNaN(num) && num > 0;
-      });
-    }
-
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Exportação Cruzada');
-    
-    const filename = `exportacao_cruzada_${new Date().toISOString().split('T')[0]}.xlsx`;
-    XLSX.writeFile(wb, filename);
-  }
-
-  /**
-   * Exporta componentes com filtros de colunas personalizados
-   */
-  exportComponentsWithColumnFilter(
-    components: Component[],
-    selectedColumns: Set<string>,
-    filename?: string
-  ) {
-    // Mapeamento de colunas
-    const columnMapping: { [key: string]: (comp: Component) => any } = {
-      'id': (comp) => comp.id,
-      'name': (comp) => comp.name,
-      'description': (comp) => comp.description || '',
-      'group': (comp) => comp.group,
-      'device': (comp) => comp.device || '',
-      'value': (comp) => comp.value || '',
-      'package': (comp) => comp.package || '',
-      'characteristics': (comp) => comp.characteristics || '',
-      'quantityInStock': (comp) => comp.quantityInStock,
-      'minimumQuantity': (comp) => comp.minimumQuantity,
-      'price': (comp) => comp.price ? `R$ ${comp.price.toFixed(2)}` : '',
-      'environment': (comp) => comp.environment || '',
-      'drawer': (comp) => comp.drawer || '',
-      'division': (comp) => comp.division || '',
-      'ncm': (comp) => comp.ncm || '',
-      'nve': (comp) => comp.nve || '',
-      'internalCode': (comp) => comp.internalCode || '',
-      'createdAt': (comp) => comp.createdAt ? new Date(comp.createdAt).toLocaleDateString('pt-BR') : ''
-    };
-
-    // Headers em português
-    const headerMapping: { [key: string]: string } = {
-      'id': 'ID',
-      'name': 'Nome',
-      'description': 'Descrição',
-      'group': 'Grupo',
-      'device': 'Device',
-      'value': 'Value',
-      'package': 'Package',
-      'characteristics': 'Características',
-      'quantityInStock': 'Qtd. Estoque',
-      'minimumQuantity': 'Qtd. Mínima',
-      'price': 'Preço',
-      'environment': 'Ambiente',
-      'drawer': 'Gaveta',
-      'division': 'Divisão',
-      'ncm': 'NCM',
-      'nve': 'NVE',
-      'internalCode': 'Código Interno',
-      'createdAt': 'Data Criação'
-    };
-
-    // Criar dados apenas com colunas selecionadas
-    const data = components.map(comp => {
-      const row: any = {};
-      selectedColumns.forEach(col => {
-        if (columnMapping[col] && headerMapping[col]) {
-          row[headerMapping[col]] = columnMapping[col](comp);
-        }
-      });
+      
       return row;
-    });
-
-    const ws = XLSX.utils.json_to_sheet(data);
+    }).filter(Boolean);
     
-    // Ajustar largura das colunas baseado no conteúdo
-    const columns = Object.keys(data[0] || {});
-    ws['!cols'] = columns.map(col => ({
-      wch: calculateColumnWidth(data, col)
-    }));
+    const ws = XLSX.utils.json_to_sheet(orderedData);
     
-    const wb = XLSX.utils.book_new();
+    // Configurar larguras das colunas
+    ws['!cols'] = [
+      { wch: 8 },   // ORDEM
+      { wch: 8 },   // QTD
+      { wch: 8 },   // TOTAL
+      { wch: 15 },  // GRUPO
+      { wch: 20 },  // DEVICE
+      { wch: 15 },  // VALUE
+      { wch: 12 },  // PACKAGE
+      { wch: 10 },  // GAVETA
+      { wch: 10 },  // ESTOQUE
+      { wch: 10 },  // COMPRAR
+      { wch: 12 }   // VALOR (se incluído)
+    ];
+    
     XLSX.utils.book_append_sheet(wb, ws, 'Componentes');
     
-    const exportFilename = filename || `componentes_${new Date().toISOString().split('T')[0]}.xlsx`;
-    XLSX.writeFile(wb, exportFilename);
+    // Adicionar aba de resumo
+    const summaryData = [{
+      'Produto': product.name,
+      'Quantidade a Produzir': productionQuantity,
+      'Total de Componentes': customOrder.length,
+      'Data': new Date().toLocaleDateString('pt-BR'),
+      'Hora': new Date().toLocaleTimeString('pt-BR')
+    }];
+    
+    if (includeValues) {
+      const totalValue = orderedData.reduce((sum, row) => {
+        if (row && row.VALOR) {
+          const value = parseFloat(row.VALOR.replace('R$', '').replace(',', '.'));
+          return sum + value;
+        }
+        return sum;
+      }, 0);
+      summaryData[0]['Valor Total'] = `R$ ${totalValue.toFixed(2).replace('.', ',')}`;
+    }
+    
+    const wsSummary = XLSX.utils.json_to_sheet(summaryData);
+    XLSX.utils.book_append_sheet(wb, wsSummary, 'Resumo');
+    
+    // Gerar arquivo
+    const fileName = `produto_${product.name.replace(/[^a-z0-9]/gi, '_')}_${new Date().getTime()}.xlsx`;
+    XLSX.writeFile(wb, fileName);
   }
 
-  /**
-   * Exporta lista de compras de componentes em alerta - CORRIGIDO
-   */
-  exportPurchaseList(components: any[], filename?: string) {
-    const data = components.map(comp => ({
-      'Grupo': comp.group || '',
-      'Device': comp.device || '',
-      'Value': comp.value || '',
-      'Package': comp.package || '',
-      'Características': comp.characteristics || '',
-      'Cód. Interno': comp.internalCode || `INTC${String(comp.id).padStart(4, '0')}`,
-      'Gaveta': comp.drawer || '',
-      'Divisão': comp.division || '',
-      'Qtd. Estoque': comp.quantityInStock || 0,
-      'Qtd. Comprar': comp.minimumQuantity ? comp.minimumQuantity * 2 : (comp.suggestedPurchase || 0),
-      'Preço Total': `R$ ${((comp.minimumQuantity ? comp.minimumQuantity * 2 : (comp.suggestedPurchase || 0)) * (comp.price || 0)).toFixed(2)}`
-    }));
-
-    const ws = XLSX.utils.json_to_sheet(data);
-    
-    // Destacar coluna de quantidade a comprar
-    const columns = Object.keys(data[0] || {});
-    const qtdComprarColIndex = columns.indexOf('Qtd. Comprar');
-    
-    if (qtdComprarColIndex !== -1) {
-      applyHighlightStyle(ws, qtdComprarColIndex, (value) => {
-        const num = parseInt(value);
-        return !isNaN(num) && num > 0;
-      });
-    }
-
-    // Configurar larguras baseado no conteúdo
-    ws['!cols'] = columns.map(col => ({
-      wch: calculateColumnWidth(data, col)
-    }));
-
+  // Exportar múltiplos produtos (exportação cruzada)
+  exportCrossProducts(
+    selectedProducts: Product[], 
+    components: Component[],
+    includeValues: boolean = true
+  ) {
     const wb = XLSX.utils.book_new();
+    
+    // Mesclar componentes de todos os produtos
+    const mergedComponents = this.mergeProductComponents(selectedProducts, components);
+    
+    // Dados para planilha principal
+    const mainData = mergedComponents.map((mergedComp, index) => {
+      const component = components.find(c => c.id === mergedComp.componentId);
+      if (!component) return null;
+      
+      const row: any = {
+        'ORDEM': index + 1,
+        'GRUPO': component.group || '',
+        'DEVICE': component.device || '',
+        'VALUE': component.value || '',
+        'PACKAGE': component.package || '',
+        'CÓDIGO': component.internalCode || '',
+        'QTD TOTAL': mergedComp.totalQuantity,
+        'PRODUTOS': mergedComp.products.join(', ')
+      };
+      
+      if (includeValues && component.price) {
+        row['VALOR UNIT.'] = formatCurrency(component.price);
+        row['VALOR TOTAL'] = formatCurrency(component.price * mergedComp.totalQuantity);
+      }
+      
+      return row;
+    }).filter(Boolean);
+    
+    const wsMain = XLSX.utils.json_to_sheet(mainData);
+    
+    // Configurar larguras
+    wsMain['!cols'] = [
+      { wch: 8 },   // ORDEM
+      { wch: 15 },  // GRUPO
+      { wch: 20 },  // DEVICE
+      { wch: 15 },  // VALUE
+      { wch: 12 },  // PACKAGE
+      { wch: 15 },  // CÓDIGO
+      { wch: 12 },  // QTD TOTAL
+      { wch: 40 },  // PRODUTOS
+      { wch: 12 },  // VALOR UNIT.
+      { wch: 12 }   // VALOR TOTAL
+    ];
+    
+    XLSX.utils.book_append_sheet(wb, wsMain, 'Componentes Consolidados');
+    
+    // Adicionar aba por produto
+    selectedProducts.forEach(product => {
+      const productData = product.components.map((pc, index) => {
+        const component = components.find(c => c.id === pc.componentId);
+        if (!component) return null;
+        
+        const row: any = {
+          'ORDEM': index + 1,
+          'GRUPO': component.group || '',
+          'DEVICE': component.device || '',
+          'VALUE': component.value || '',
+          'PACKAGE': component.package || '',
+          'QUANTIDADE': pc.quantity
+        };
+        
+        if (includeValues && component.price) {
+          row['VALOR UNIT.'] = formatCurrency(component.price);
+          row['VALOR TOTAL'] = formatCurrency(component.price * pc.quantity);
+        }
+        
+        return row;
+      }).filter(Boolean);
+      
+      const wsProduct = XLSX.utils.json_to_sheet(productData);
+      const sheetName = product.name.substring(0, 30).replace(/[^a-zA-Z0-9 ]/g, '');
+      XLSX.utils.book_append_sheet(wb, wsProduct, sheetName);
+    });
+    
+    // Gerar arquivo
+    const fileName = `exportacao_cruzada_${new Date().getTime()}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+  }
+
+  // Exportar lista de compras
+  exportPurchaseList(alertedComponents: AlertedComponent[]) {
+    const wb = XLSX.utils.book_new();
+    
+    // Agrupar por componente (ignorando ambiente)
+    const grouped = new Map<string, AlertedComponent[]>();
+    
+    alertedComponents.forEach(comp => {
+      const key = `${comp.group}-${comp.device}-${comp.value}-${comp.package}-${comp.internalCode}`;
+      if (!grouped.has(key)) {
+        grouped.set(key, []);
+      }
+      grouped.get(key)!.push(comp);
+    });
+    
+    // Criar dados agrupados
+    const purchaseData = Array.from(grouped.entries()).map(([key, components], index) => {
+      const firstComp = components[0];
+      const environments = [...new Set(components.map(c => c.environment))];
+      const maxMinQuantity = Math.max(...components.map(c => c.minimumQuantity));
+      const suggestedPurchase = maxMinQuantity * 2;
+      const unitPrice = firstComp.price || 0;
+      
+      return {
+        'ORDEM': index + 1,
+        'GRUPO': firstComp.group,
+        'DEVICE': firstComp.device || '',
+        'VALUE': firstComp.value || '',
+        'PACKAGE': firstComp.package || '',
+        'CÓD. INTERNO': firstComp.internalCode || '',
+        'AMBIENTES': environments.map(e => e === 'laboratorio' ? 'Lab' : 'Est').join(', '),
+        'QTD. MÍNIMA': maxMinQuantity,
+        'SUGESTÃO COMPRA': suggestedPurchase,
+        'PREÇO UNIT.': formatCurrency(unitPrice),
+        'TOTAL': formatCurrency(suggestedPurchase * unitPrice)
+      };
+    });
+    
+    const ws = XLSX.utils.json_to_sheet(purchaseData);
+    
+    // Configurar larguras
+    ws['!cols'] = [
+      { wch: 8 },   // ORDEM
+      { wch: 15 },  // GRUPO
+      { wch: 20 },  // DEVICE
+      { wch: 15 },  // VALUE
+      { wch: 12 },  // PACKAGE
+      { wch: 15 },  // CÓD. INTERNO
+      { wch: 12 },  // AMBIENTES
+      { wch: 12 },  // QTD. MÍNIMA
+      { wch: 15 },  // SUGESTÃO COMPRA
+      { wch: 12 },  // PREÇO UNIT.
+      { wch: 12 }   // TOTAL
+    ];
+    
     XLSX.utils.book_append_sheet(wb, ws, 'Lista de Compras');
     
-    const exportFilename = filename || `lista_compras_${new Date().toISOString().split('T')[0]}.xlsx`;
-    XLSX.writeFile(wb, exportFilename);
+    // Adicionar resumo
+    const summaryData = [{
+      'Total de Itens': purchaseData.length,
+      'Valor Total': formatCurrency(purchaseData.reduce((sum, item) => {
+        const value = parseFloat(item.TOTAL.replace('R$', '').replace('.', '').replace(',', '.'));
+        return sum + value;
+      }, 0)),
+      'Data': new Date().toLocaleDateString('pt-BR'),
+      'Hora': new Date().toLocaleTimeString('pt-BR')
+    }];
+    
+    const wsSummary = XLSX.utils.json_to_sheet(summaryData);
+    XLSX.utils.book_append_sheet(wb, wsSummary, 'Resumo');
+    
+    // Gerar arquivo
+    const fileName = `lista_compras_${new Date().getTime()}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+  }
+
+  // Método auxiliar para mesclar componentes
+  private mergeProductComponents(products: Product[], components: Component[]): MergedComponent[] {
+    const componentMap = new Map<number, MergedComponent>();
+    
+    products.forEach(product => {
+      product.components.forEach(pc => {
+        if (componentMap.has(pc.componentId)) {
+          const existing = componentMap.get(pc.componentId)!;
+          existing.totalQuantity += pc.quantity;
+          existing.products.push(product.name);
+        } else {
+          const component = components.find(c => c.id === pc.componentId);
+          componentMap.set(pc.componentId, {
+            componentId: pc.componentId,
+            componentName: component?.device || pc.componentName,
+            group: component?.group || pc.group,
+            device: component?.device,
+            value: component?.value,
+            package: component?.package,
+            characteristics: component?.characteristics,
+            internalCode: component?.internalCode,
+            drawer: component?.drawer,
+            division: component?.division,
+            totalQuantity: pc.quantity,
+            products: [product.name],
+            unitPrice: component?.price
+          });
+        }
+      });
+    });
+    
+    return Array.from(componentMap.values());
   }
 }
 
