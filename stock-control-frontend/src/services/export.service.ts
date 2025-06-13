@@ -20,9 +20,35 @@ class ExportService {
       }
     });
     
-    // Adicionar um pouco de padding e limitar entre min e max
-    const width = Math.min(Math.max(maxLength + 2, 8), 50);
-    return width;
+    // Larguras mínimas específicas para cada tipo de coluna
+    const minWidths: { [key: string]: number } = {
+      'ID': 5,
+      'Grupo': 12,
+      'Device': 15,
+      'Value': 10,
+      'Package': 10,
+      'Cód. Interno': 12,
+      'Descrição': 25,
+      'Qtd. Estoque': 12,
+      'Qtd. Mínima': 12,
+      'Preço Unit.': 12,
+      'Ambiente': 12,
+      'Gaveta': 10,
+      'Divisão': 10,
+      'NCM': 12,
+      'NVE': 8,
+      'Características': 20
+    };
+    
+    // Obter largura mínima para a coluna
+    const minWidth = minWidths[headerText] || 10;
+    
+    // Calcular largura com fator de padding para Google Sheets
+    // Fator 1.2 para dar um espaço extra
+    const calculatedWidth = Math.max(maxLength * 1.2, minWidth);
+    
+    // Limitar entre min e max
+    return Math.min(Math.ceil(calculatedWidth), 50);
   }
 
   // Função para gerar configuração de larguras automáticas
@@ -229,7 +255,7 @@ class ExportService {
     
     const wsMain = XLSX.utils.json_to_sheet(mainData);
     
-    // Usar larguras automáticas baseadas no conteúdo
+    // Usar larguras automáticas
     wsMain['!cols'] = this.generateAutoColumnWidths(mainData);
     
     XLSX.utils.book_append_sheet(wb, wsMain, 'Componentes Consolidados');
@@ -258,7 +284,6 @@ class ExportService {
       }).filter(Boolean);
       
       const wsProduct = XLSX.utils.json_to_sheet(productData);
-      // Usar larguras automáticas para cada aba de produto
       wsProduct['!cols'] = this.generateAutoColumnWidths(productData);
       
       const sheetName = product.name.substring(0, 30).replace(/[^a-zA-Z0-9 ]/g, '');
@@ -310,7 +335,7 @@ class ExportService {
     
     const ws = XLSX.utils.json_to_sheet(purchaseData);
     
-    // Usar larguras automáticas baseadas no conteúdo
+    // Usar larguras automáticas
     ws['!cols'] = this.generateAutoColumnWidths(purchaseData);
     
     XLSX.utils.book_append_sheet(wb, ws, 'Lista de Compras');
@@ -334,23 +359,22 @@ class ExportService {
     XLSX.writeFile(wb, fileName);
   }
 
-  // Método auxiliar para mesclar componentes de múltiplos produtos
+  // Método auxiliar para mesclar componentes
   private mergeProductComponents(products: Product[], components: Component[]): MergedComponent[] {
-    const mergedMap = new Map<number, MergedComponent>();
+    const componentMap = new Map<number, MergedComponent>();
     
     products.forEach(product => {
       product.components.forEach(pc => {
-        const component = components.find(c => c.id === pc.componentId);
-        
-        if (mergedMap.has(pc.componentId)) {
-          const existing = mergedMap.get(pc.componentId)!;
+        if (componentMap.has(pc.componentId)) {
+          const existing = componentMap.get(pc.componentId)!;
           existing.totalQuantity += pc.quantity;
           existing.products.push(product.name);
         } else {
-          mergedMap.set(pc.componentId, {
+          const component = components.find(c => c.id === pc.componentId);
+          componentMap.set(pc.componentId, {
             componentId: pc.componentId,
-            componentName: component?.name || pc.componentName || '',
-            group: component?.group || pc.group || '',
+            componentName: component?.name || pc.componentName,
+            group: component?.group || pc.group,
             device: component?.device,
             value: component?.value,
             package: component?.package,
@@ -366,8 +390,9 @@ class ExportService {
       });
     });
     
-    return Array.from(mergedMap.values());
+    return Array.from(componentMap.values());
   }
 }
 
-export default new ExportService();
+const exportService = new ExportService();
+export default exportService;

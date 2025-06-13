@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Check, DollarSign, TrendingDown, AlertTriangle } from 'lucide-react';
+import { DollarSign, TrendingDown, AlertTriangle } from 'lucide-react';
 import BaseModal from '../common/BaseModal';
 import ConfirmModal from '../common/ConfirmModal';
 import { Product, Component } from '../../types';
@@ -87,9 +87,15 @@ const ExportModal: React.FC<ExportModalProps> = ({
       
       setShowStockConfirm(false);
       onClose();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao dar baixa no estoque:', error);
-      alert('Erro ao processar baixa no estoque');
+      if (error.response?.status === 403) {
+        alert('Acesso negado. Apenas administradores podem realizar esta ação.');
+      } else if (error.response?.data?.message) {
+        alert(`Erro: ${error.response.data.message}`);
+      } else {
+        alert('Erro ao dar baixa no estoque. Tente novamente.');
+      }
     } finally {
       setStockLoading(false);
     }
@@ -113,6 +119,18 @@ const ExportModal: React.FC<ExportModalProps> = ({
     return productOrder.length;
   };
 
+  const getTotalValue = () => {
+    return productOrder.reduce((total, componentId) => {
+      const productComponent = getProductComponents().find(pc => pc.componentId === componentId);
+      const component = getComponentDetails(componentId);
+      if (productComponent && component) {
+        const quantity = productComponent.quantity * productionQuantity;
+        return total + (component.price || 0) * quantity;
+      }
+      return total;
+    }, 0);
+  };
+
   return (
     <BaseModal
       isOpen={isOpen}
@@ -120,139 +138,156 @@ const ExportModal: React.FC<ExportModalProps> = ({
       title={`Exportar: ${product?.name || 'Produto'}`}
       size="xl"
     >
-      <div className="space-y-4">
-        {/* Quantidade de Produção */}
-        <div className="bg-gray-50 p-4 rounded-lg">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Quantidade a Produzir
-          </label>
-          <input
-            type="number"
-            min="1"
-            value={productionQuantity}
-            onChange={(e) => setProductionQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-            className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          />
-        </div>
-
-        {/* Opção de incluir valores */}
-        <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
-          <button
-            onClick={() => setIncludeValues(!includeValues)}
-            className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
-              includeValues 
-                ? 'bg-blue-600 border-blue-600' 
-                : 'bg-white border-gray-300 hover:border-gray-400'
-            }`}
-          >
-            {includeValues && <Check size={12} className="text-white" />}
-          </button>
-          <div className="flex-1">
-            <label className="text-sm font-medium text-gray-700 cursor-pointer">
-              Incluir valores (R$)?
+      <div className="p-4">
+        {/* Quantidade a produzir */}
+        <div className="mb-4">
+          <div className="flex items-center gap-4">
+            <label className="text-sm font-medium text-gray-700">
+              Quantidade a Produzir:
             </label>
-            <p className="text-xs text-gray-500 mt-0.5">
-              Marque para incluir os preços dos componentes no relatório
-            </p>
+            <input
+              type="number"
+              min="1"
+              value={productionQuantity}
+              onChange={(e) => setProductionQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+              className="w-20 px-2 py-1 text-center border border-gray-300 rounded focus:border-blue-500"
+            />
           </div>
         </div>
 
-        {/* Avisos de estoque baixo */}
+        {/* Checkbox incluir valores */}
+        <div className="mb-4">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={includeValues}
+              onChange={(e) => setIncludeValues(e.target.checked)}
+              className="w-4 h-4 text-blue-600 rounded"
+            />
+            <span className="text-sm text-gray-700 flex items-center gap-1">
+              <DollarSign size={16} />
+              Incluir valores (R$)?
+            </span>
+            <span className="text-xs text-gray-500 ml-2">
+              Marque para incluir os preços dos componentes no relatório
+            </span>
+          </label>
+        </div>
+
+        {/* Avisos de estoque */}
         {stockWarnings.length > 0 && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="text-yellow-600 flex-shrink-0 mt-0.5" size={20} />
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-yellow-800">Avisos de Estoque</p>
-                <div className="text-xs text-yellow-700 space-y-1">
-                  {stockWarnings.map((warning, index) => (
-                    <p key={index}>{warning}</p>
-                  ))}
-                </div>
+          <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <div className="flex items-start gap-2">
+              <AlertTriangle size={20} className="text-yellow-600 mt-0.5" />
+              <div className="text-sm text-yellow-800">
+                <p className="font-medium mb-1">Avisos de Estoque:</p>
+                {stockWarnings.map((warning, idx) => (
+                  <p key={idx} className="mb-0.5">• {warning}</p>
+                ))}
               </div>
             </div>
           </div>
         )}
 
+        {/* Ordem dos Componentes */}
         <div className="mb-4">
-          <h3 className="text-sm font-medium text-gray-700 mb-2">Ordem dos Componentes</h3>
+          <h3 className="text-sm font-medium text-gray-700 mb-3">Ordem dos Componentes</h3>
           <div className="border border-gray-200 rounded-lg overflow-hidden">
-            <div className="max-h-64 overflow-y-auto">
-              <table className="w-full text-xs">
-                <thead className="bg-gray-50 sticky top-0">
-                  <tr>
-                    <th className="px-2 py-2 text-left font-medium text-gray-700">ORDEM</th>
-                    <th className="px-2 py-2 text-left font-medium text-gray-700">QTD</th>
-                    <th className="px-2 py-2 text-left font-medium text-gray-700">TOTAL</th>
-                    <th className="px-2 py-2 text-left font-medium text-gray-700">GRUPO</th>
-                    <th className="px-2 py-2 text-left font-medium text-gray-700">DEVICE</th>
-                    <th className="px-2 py-2 text-left font-medium text-gray-700">VALUE</th>
-                    <th className="px-2 py-2 text-left font-medium text-gray-700">PACKAGE</th>
-                    <th className="px-2 py-2 text-left font-medium text-gray-700">GAVETA</th>
-                    <th className="px-2 py-2 text-left font-medium text-gray-700">ESTOQUE</th>
-                    <th className="px-2 py-2 text-left font-medium text-gray-700">COMPRAR</th>
-                    {includeValues && (
-                      <th className="px-2 py-2 text-left font-medium text-gray-700">VALOR</th>
-                    )}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {productOrder.map((componentId, index) => {
-                    const productComponent = getProductComponents().find(pc => pc.componentId === componentId);
-                    const component = getComponentDetails(componentId);
-                    
-                    if (!productComponent || !component) return null;
-                    
-                    const quantity = 'quantity' in productComponent ? productComponent.quantity : 0;
-                    const totalQuantity = quantity * productionQuantity;
-                    const needToBuy = Math.max(0, totalQuantity - component.quantityInStock);
-                    
-                    return (
-                      <tr key={componentId} className="hover:bg-gray-50">
-                        <td className="px-2 py-2">
-                          <input
-                            type="number"
-                            min="1"
-                            max={getTotalComponents()}
-                            value={orderInputs[componentId] || index + 1}
-                            onChange={(e) => handleOrderChange(componentId, parseInt(e.target.value) || 1)}
-                            className="w-12 px-1 py-0.5 text-center border border-gray-300 rounded"
-                          />
-                        </td>
-                        <td className="px-2 py-2 text-center">{quantity}</td>
-                        <td className="px-2 py-2 text-center font-medium">{totalQuantity}</td>
-                        <td className="px-2 py-2">{component.group}</td>
-                        <td className="px-2 py-2">{component.device || '-'}</td>
-                        <td className="px-2 py-2 text-xs">{component.value || '-'}</td>
-                        <td className="px-2 py-2 text-xs">{component.package || '-'}</td>
-                        <td className="px-2 py-2 text-xs">{component.drawer || '-'}</td>
-                        <td className="px-2 py-2 text-center">
-                          <span className={`font-medium ${
-                            component.quantityInStock < totalQuantity ? 'text-red-600' : 'text-green-600'
-                          }`}>
-                            {component.quantityInStock}
-                          </span>
-                        </td>
-                        <td className="px-2 py-2 text-center">
-                          {needToBuy > 0 && (
-                            <span className="text-orange-600 font-medium">{needToBuy}</span>
-                          )}
-                        </td>
-                        {includeValues && (
-                          <td className="px-2 py-2 text-right font-medium">
-                            R$ {((component.price || 0) * totalQuantity).toFixed(2)}
-                          </td>
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-3 py-2 text-left font-medium text-gray-700">ORDEM</th>
+                  <th className="px-3 py-2 text-left font-medium text-gray-700">QTD</th>
+                  <th className="px-3 py-2 text-left font-medium text-gray-700">DEVICE</th>
+                  <th className="px-3 py-2 text-left font-medium text-gray-700">VALUE</th>
+                  <th className="px-3 py-2 text-center font-medium text-gray-700">PACKAGE</th>
+                  <th className="px-3 py-2 text-center font-medium text-gray-700">CÓD.</th>
+                  <th className="px-3 py-2 text-center font-medium text-gray-700">GAVETA</th>
+                  <th className="px-3 py-2 text-center font-medium text-gray-700">ESTOQUE</th>
+                  <th className="px-3 py-2 text-center font-medium text-gray-700">COMPRAR</th>
+                  <th className="px-3 py-2 text-center font-medium text-gray-700">UNIDADE</th>
+                  {includeValues && (
+                    <th className="px-3 py-2 text-right font-medium text-gray-700">TOTAL</th>
+                  )}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {productOrder.map((componentId, index) => {
+                  const productComponent = getProductComponents().find(pc => pc.componentId === componentId);
+                  const component = getComponentDetails(componentId);
+                  
+                  if (!productComponent || !component) return null;
+                  
+                  const baseQuantity = productComponent.quantity;
+                  const totalQuantity = baseQuantity * productionQuantity;
+                  const needToBuy = Math.max(0, totalQuantity - component.quantityInStock);
+                  
+                  return (
+                    <tr key={componentId} className="hover:bg-gray-50">
+                      <td className="px-3 py-2">
+                        <input
+                          type="number"
+                          value={orderInputs[componentId] || index + 1}
+                          onChange={(e) => handleOrderChange(componentId, parseInt(e.target.value) || 1)}
+                          className="w-12 px-1 py-0.5 text-center border border-gray-300 rounded"
+                          min="1"
+                          max={productOrder.length}
+                        />
+                      </td>
+                      <td className="px-3 py-2 text-center">{baseQuantity}</td>
+                      <td className="px-3 py-2">{component.device || '-'}</td>
+                      <td className="px-3 py-2">{component.value || '-'}</td>
+                      <td className="px-3 py-2 text-center">{component.package || '-'}</td>
+                      <td className="px-3 py-2 text-center">{component.internalCode || '-'}</td>
+                      <td className="px-3 py-2 text-center">{component.drawer || '-'}</td>
+                      <td className="px-3 py-2 text-center">
+                        <span className={`font-medium ${
+                          component.quantityInStock < totalQuantity ? 'text-red-600' : 'text-green-600'
+                        }`}>
+                          {component.quantityInStock}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        {needToBuy > 0 && (
+                          <span className="text-orange-600 font-medium">{needToBuy}</span>
                         )}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        {productionQuantity > 1 ? `1 × ${productionQuantity}` : '1'}
+                      </td>
+                      {includeValues && (
+                        <td className="px-3 py-2 text-right font-medium">
+                          R$ {((component.price || 0) * totalQuantity).toFixed(2)}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+              {includeValues && (
+                <tfoot className="bg-gray-50 border-t-2 border-gray-200">
+                  <tr>
+                    <td colSpan={10} className="px-3 py-2 text-right font-medium">
+                      Total Geral:
+                    </td>
+                    <td className="px-3 py-2 text-right font-bold text-green-600">
+                      R$ {getTotalValue().toFixed(2)}
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
           </div>
+          <div className="mt-2 flex justify-between items-center text-xs text-gray-500">
+            <span>Total de componentes únicos: {getTotalComponents()}</span>
+            <span>Total geral: {product?.components?.reduce((sum, pc) => sum + pc.quantity, 0) || 0} unidades</span>
+          </div>
+          <p className="mt-2 text-xs text-gray-500">
+            Nota: Componentes iguais foram agrupados e suas quantidades somadas.
+          </p>
         </div>
 
-        {/* Ações */}
+        {/* Botões de ação */}
         <div className="flex justify-between pt-4 border-t">
           <div className="flex gap-2">
             <button
