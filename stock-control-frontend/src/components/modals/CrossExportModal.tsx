@@ -22,9 +22,12 @@ interface CrossExportModalProps {
 interface MergedComponent {
   componentId: number;
   totalQuantity: number;
+  group?: string;
   device?: string;
   value?: string;
   package?: string;
+  drawer?: string;
+  division?: string;
   products: Array<{
     productId: number;
     productName: string;
@@ -73,10 +76,11 @@ const CrossExportModal: React.FC<CrossExportModalProps> = ({
       const quantity = productQuantities[product.id] || 1;
       
       product.components.forEach(pc => {
-        const existing = componentMap.get(pc.componentId);
         const component = getComponentDetails(pc.componentId);
+        if (!component) return;
         
-        if (existing) {
+        if (componentMap.has(pc.componentId)) {
+          const existing = componentMap.get(pc.componentId)!;
           existing.totalQuantity += pc.quantity * quantity;
           existing.products.push({
             productId: product.id,
@@ -87,9 +91,12 @@ const CrossExportModal: React.FC<CrossExportModalProps> = ({
           componentMap.set(pc.componentId, {
             componentId: pc.componentId,
             totalQuantity: pc.quantity * quantity,
-            device: component?.device,
-            value: component?.value,
-            package: component?.package,
+            group: component.group,
+            device: component.device,
+            value: component.value,
+            package: component.package,
+            drawer: component.drawer,
+            division: component.division,
             products: [{
               productId: product.id,
               productName: product.name,
@@ -99,48 +106,39 @@ const CrossExportModal: React.FC<CrossExportModalProps> = ({
         }
       });
     });
-    
-    // Converter para array e ordenar
-    const merged = Array.from(componentMap.values()).sort((a, b) => {
-      // Ordenar por value numérico primeiro
-      const aValueNum = parseInt(a.value?.replace(/\D/g, '') || '0');
-      const bValueNum = parseInt(b.value?.replace(/\D/g, '') || '0');
-      
-      if (aValueNum !== bValueNum) {
-        return aValueNum - bValueNum;
-      }
-      
-      return (a.device || '').localeCompare(b.device || '');
-    });
 
+    const merged = Array.from(componentMap.values());
     setMergedComponents(merged);
-    setComponentOrder(merged.map(c => c.componentId));
     
-    const inputs = orderingService.createOrderInputsFromArray(merged.map(c => c.componentId));
+    // Inicializar ordem
+    const order = merged.map(m => m.componentId);
+    setComponentOrder(order);
+    
+    const inputs = orderingService.createOrderInputsFromArray(order);
     setOrderInputs(inputs);
   };
 
   const handleProductQuantityChange = (productId: number, value: string) => {
-    const numValue = parseInt(value) || 1;
+    const qty = Math.max(1, parseInt(value) || 1);
     setProductQuantities(prev => ({
       ...prev,
-      [productId]: Math.max(1, numValue)
+      [productId]: qty
     }));
   };
 
   const handleOrderInputChange = (componentId: number, value: string) => {
-    const numValue = parseInt(value) || 0;
+    const order = parseInt(value) || '';
     setOrderInputs(prev => ({
       ...prev,
-      [componentId]: numValue
+      [componentId]: order as any
     }));
   };
 
   const handleReorder = () => {
-    const newOrder = orderingService.sortByOrderInputs(componentOrder, orderInputs);
-    setComponentOrder(newOrder);
+    const sortedIds = orderingService.getSortedComponentIds(orderInputs);
+    setComponentOrder(sortedIds);
     
-    const newInputs = orderingService.createOrderInputsFromArray(newOrder);
+    const newInputs = orderingService.createOrderInputsFromArray(sortedIds);
     setOrderInputs(newInputs);
   };
 
@@ -149,42 +147,32 @@ const CrossExportModal: React.FC<CrossExportModalProps> = ({
       setStockLoading(true);
       setStockWarnings([]);
       
-      // Criar mapa de componentes para acesso rápido
       const componentMap = new Map(
         components.map(c => [c.id, c])
       );
       
-      const movements = mergedComponents.map(comp => ({
-        componentId: comp.componentId,
+      const movements = mergedComponents.map(mc => ({
+        componentId: mc.componentId,
         movementType: 'Saida' as const,
-        quantity: comp.totalQuantity
+        quantity: mc.totalQuantity
       }));
 
-      // Usar o novo método com suporte a baixa parcial
       const result = await movementsService.createBulkPartial(movements, componentMap);
       
       if (result.warnings.length > 0) {
-        // Mostrar avisos em um alert mais elaborado
+        setStockWarnings(result.warnings);
         const warningMessage = `ATENÇÃO - Baixa Parcial Realizada:\n\n${result.warnings.join('\n\n')}`;
         alert(warningMessage);
-        
-        setStockWarnings(result.warnings);
       } else if (result.success) {
         alert('Baixa no estoque realizada com sucesso!');
       }
       
       setShowStockConfirm(false);
-      
-      // Só fecha o modal se não houver avisos
-      if (result.warnings.length === 0) {
-        onClose();
-        window.location.reload();
-      }
+      onClose();
     } catch (error: any) {
       console.error('Erro ao dar baixa no estoque:', error);
-      
       if (error.response?.status === 403) {
-        alert('Você não tem permissão para dar baixa no estoque. Apenas administradores podem realizar esta ação.');
+        alert('Acesso negado. Apenas administradores podem realizar esta ação.');
       } else if (error.response?.data?.message) {
         alert(`Erro: ${error.response.data.message}`);
       } else {
@@ -312,17 +300,18 @@ const CrossExportModal: React.FC<CrossExportModalProps> = ({
                 <thead className="bg-gray-50 sticky top-0">
                   <tr>
                     <th className="px-2 py-2 text-left font-medium text-gray-700">ORDEM</th>
-                    <th className="px-2 py-2 text-left font-medium text-gray-700">QTD</th>
+                    <th className="px-2 py-2 text-center font-medium text-gray-700">QTD</th>
+                    <th className="px-2 py-2 text-left font-medium text-gray-700">GRUPO</th>
                     <th className="px-2 py-2 text-left font-medium text-gray-700">DEVICE</th>
                     <th className="px-2 py-2 text-left font-medium text-gray-700">VALUE</th>
-                    <th className="px-2 py-2 text-left font-medium text-gray-700">PACKAGE</th>
-                    <th className="px-2 py-2 text-left font-medium text-gray-700">CÓD.</th>
-                    <th className="px-2 py-2 text-left font-medium text-gray-700">GAVETA</th>
-                    <th className="px-2 py-2 text-left font-medium text-gray-700">ESTOQUE</th>
-                    <th className="px-2 py-2 text-left font-medium text-gray-700">COMPRAR</th>
+                    <th className="px-2 py-2 text-center font-medium text-gray-700">PACKAGE</th>
+                    <th className="px-2 py-2 text-center font-medium text-gray-700">GAVETA</th>
+                    <th className="px-2 py-2 text-center font-medium text-gray-700">DIVISÃO</th>
+                    <th className="px-2 py-2 text-center font-medium text-gray-700">QTD ESTOQUE</th>
+                    <th className="px-2 py-2 text-center font-medium text-gray-700">QTD COMPRAR</th>
                     <th className="px-2 py-2 text-left font-medium text-gray-700">UNIDADE</th>
                     {includeValues && (
-                      <th className="px-2 py-2 text-left font-medium text-gray-700">TOTAL</th>
+                      <th className="px-2 py-2 text-right font-medium text-gray-700">PREÇO TOTAL</th>
                     )}
                   </tr>
                 </thead>
@@ -334,6 +323,7 @@ const CrossExportModal: React.FC<CrossExportModalProps> = ({
                     if (!merged || !component) return null;
                     
                     const needToBuy = Math.max(0, merged.totalQuantity - component.quantityInStock);
+                    const productNames = merged.products.map(p => `${p.quantity} × ${p.productName}`).join('\n');
                     
                     return (
                       <tr key={componentId} className="hover:bg-gray-50">
@@ -347,26 +337,23 @@ const CrossExportModal: React.FC<CrossExportModalProps> = ({
                           />
                         </td>
                         <td className="px-2 py-2 text-center font-medium">{merged.totalQuantity}</td>
-                        <td className="px-2 py-2">{component.device || '-'}</td>
-                        <td className="px-2 py-2">{component.value || '-'}</td>
-                        <td className="px-2 py-2">{component.package || '-'}</td>
-                        <td className="px-2 py-2">INTC{String(componentId).padStart(4, '0')}</td>
-                        <td className="px-2 py-2 text-center">{component.drawer || '-'}</td>
+                        <td className="px-2 py-2">{merged.group || '-'}</td>
+                        <td className="px-2 py-2">{merged.device || '-'}</td>
+                        <td className="px-2 py-2">{merged.value || '-'}</td>
+                        <td className="px-2 py-2 text-center">{merged.package || '-'}</td>
+                        <td className="px-2 py-2 text-center">{merged.drawer || '-'}</td>
+                        <td className="px-2 py-2 text-center">{merged.division || '-'}</td>
                         <td className={`px-2 py-2 text-center ${component.quantityInStock < merged.totalQuantity ? 'text-orange-600 font-medium' : ''}`}>
                           {component.quantityInStock}
                         </td>
-                        <td className={`px-2 py-2 text-center font-medium ${needToBuy > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                          {needToBuy || '0'}
+                        <td className={`px-2 py-2 text-center font-medium ${needToBuy > 0 ? 'text-orange-600' : 'text-green-600'}`}>
+                          {needToBuy}
                         </td>
-                        <td className="px-2 py-2 text-xs">
-                          {merged.products.map((p, i) => (
-                            <div key={i} className="truncate" title={`${p.quantity} × ${p.productName}`}>
-                              {p.quantity} × {p.productName}
-                            </div>
-                          ))}
+                        <td className="px-2 py-2">
+                          <div className="text-xs whitespace-pre-line">{productNames}</div>
                         </td>
                         {includeValues && (
-                          <td className="px-2 py-2 text-right">
+                          <td className="px-2 py-2 text-right font-medium">
                             R$ {((component.price || 0) * merged.totalQuantity).toFixed(2)}
                           </td>
                         )}
@@ -374,26 +361,41 @@ const CrossExportModal: React.FC<CrossExportModalProps> = ({
                     );
                   })}
                 </tbody>
+                {includeValues && (
+                  <tfoot className="bg-gray-50 border-t-2 border-gray-200">
+                    <tr>
+                      <td colSpan={11} className="px-2 py-2 text-right font-medium">
+                        Total Geral:
+                      </td>
+                      <td className="px-2 py-2 text-right font-bold text-green-600">
+                        R$ {mergedComponents.reduce((total, mc) => {
+                          const component = getComponentDetails(mc.componentId);
+                          return total + ((component?.price || 0) * mc.totalQuantity);
+                        }, 0).toFixed(2)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
           </div>
-          <button
-            onClick={handleReorder}
-            className="mt-2 px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
-          >
-            Reordenar
-          </button>
-        </div>
-
-        <div className="mt-3 p-3 bg-gray-50 rounded text-xs text-gray-600">
-          <p className="mb-1">
-            <strong>Total de componentes únicos:</strong> {mergedComponents.length}
-          </p>
-          <p className="mb-1">
-            <strong>Total geral:</strong> {mergedComponents.reduce((sum, m) => sum + m.totalQuantity, 0)} unidades
-          </p>
-          <p className="text-xs text-gray-500 mt-2">
-            <strong>Nota:</strong> Componentes iguais foram agrupados e suas quantidades somadas.
+          
+          {/* Botão Reordenar */}
+          <div className="mt-3">
+            <button
+              onClick={handleReorder}
+              className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+            >
+              Reordenar
+            </button>
+          </div>
+          
+          <div className="mt-3 flex justify-between items-center text-xs text-gray-500">
+            <span>Total de componentes únicos: {mergedComponents.length}</span>
+            <span>Total geral: {mergedComponents.reduce((sum, mc) => sum + mc.totalQuantity, 0)} unidades</span>
+          </div>
+          <p className="mt-1 text-xs text-gray-500">
+            Nota: Componentes iguais foram agrupados e suas quantidades somadas.
           </p>
         </div>
 

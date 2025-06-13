@@ -140,10 +140,12 @@ class ExportService {
     ws['!cols'] = this.generateAutoColumnWidths(data);
     
     XLSX.utils.book_append_sheet(wb, ws, 'Componentes');
-    XLSX.writeFile(wb, filename);
+    
+    const date = new Date().toLocaleDateString('pt-BR').replace(/\//g, '-');
+    XLSX.writeFile(wb, filename || `componentes_${date}.xlsx`);
   }
 
-  // Exportar produto com ordem customizada
+  // Exportar produto com ordem customizada - COLUNAS ATUALIZADAS
   exportProductWithCustomOrder(
     product: Product, 
     components: Component[], 
@@ -153,39 +155,38 @@ class ExportService {
   ) {
     const wb = XLSX.utils.book_new();
     
-    // Criar dados ordenados
+    // Criar dados ordenados com NOVAS COLUNAS
     const orderedData = customOrder.map((componentId, index) => {
       const productComponent = product.components.find(pc => pc.componentId === componentId);
       const component = components.find(c => c.id === componentId);
       
       if (!productComponent || !component) return null;
       
-      const quantity = productComponent.quantity * productionQuantity;
-      const needToBuy = Math.max(0, quantity - component.quantityInStock);
+      const totalQuantity = productComponent.quantity * productionQuantity;
+      const needToBuy = Math.max(0, totalQuantity - component.quantityInStock);
       
       const row: any = {
         'ORDEM': index + 1,
-        'QTD': productComponent.quantity,
-        'TOTAL': quantity,
+        'QTD UTILIZADA': totalQuantity,
         'GRUPO': component.group || '',
         'DEVICE': component.device || '',
         'VALUE': component.value || '',
         'PACKAGE': component.package || '',
+        'CARACTERÍSTICAS': component.characteristics || '',
         'GAVETA': component.drawer || '',
-        'ESTOQUE': component.quantityInStock,
-        'COMPRAR': needToBuy > 0 ? needToBuy : 0
+        'DIVISÃO': component.division || '',
+        'QTD. ESTOQUE': component.quantityInStock,
+        'QTD. COMPRAR': needToBuy > 0 ? needToBuy : 0
       };
       
       if (includeValues) {
-        row['VALOR'] = `R$ ${((component.price || 0) * quantity).toFixed(2).replace('.', ',')}`;
+        row['PREÇO TOTAL'] = formatCurrency((component.price || 0) * totalQuantity);
       }
       
       return row;
     }).filter(Boolean);
     
     const ws = XLSX.utils.json_to_sheet(orderedData);
-    
-    // Usar larguras automáticas baseadas no conteúdo
     ws['!cols'] = this.generateAutoColumnWidths(orderedData);
     
     XLSX.utils.book_append_sheet(wb, ws, 'Componentes');
@@ -194,20 +195,21 @@ class ExportService {
     const summaryData: SummaryData = {
       'Produto': product.name,
       'Quantidade a Produzir': productionQuantity,
-      'Total de Componentes': customOrder.length,
+      'Total de Componentes Únicos': customOrder.length,
+      'Total de Unidades': orderedData.reduce((sum, row) => sum + (row['QTD UTILIZADA'] || 0), 0),
       'Data': new Date().toLocaleDateString('pt-BR'),
       'Hora': new Date().toLocaleTimeString('pt-BR')
     };
     
     if (includeValues) {
       const totalValue = orderedData.reduce((sum, row) => {
-        if (row && row.VALOR) {
-          const value = parseFloat(row.VALOR.replace('R$', '').replace(',', '.'));
+        if (row && row['PREÇO TOTAL']) {
+          const value = parseFloat(row['PREÇO TOTAL'].replace('R$', '').replace(',', '.'));
           return sum + value;
         }
         return sum;
       }, 0);
-      summaryData['Valor Total'] = `R$ ${totalValue.toFixed(2).replace('.', ',')}`;
+      summaryData['Valor Total'] = formatCurrency(totalValue);
     }
     
     const wsSummary = XLSX.utils.json_to_sheet([summaryData]);
@@ -218,7 +220,43 @@ class ExportService {
     XLSX.writeFile(wb, fileName);
   }
 
-  // Exportar múltiplos produtos (exportação cruzada)
+  // Mesclar componentes de múltiplos produtos
+  private mergeProductComponents(selectedProducts: Product[], components: Component[]): MergedComponent[] {
+    const componentMap = new Map<number, MergedComponent>();
+    
+    selectedProducts.forEach(product => {
+      product.components.forEach(pc => {
+        const component = components.find(c => c.id === pc.componentId);
+        if (!component) return;
+        
+        if (componentMap.has(pc.componentId)) {
+          const existing = componentMap.get(pc.componentId)!;
+          existing.totalQuantity += pc.quantity;
+          existing.products.push(product.name);
+        } else {
+          componentMap.set(pc.componentId, {
+            componentId: pc.componentId,
+            componentName: component.name || '',
+            group: component.group || '',
+            device: component.device,
+            value: component.value,
+            package: component.package,
+            characteristics: component.characteristics,
+            drawer: component.drawer,
+            division: component.division,
+            internalCode: component.internalCode,
+            totalQuantity: pc.quantity,
+            products: [product.name],
+            unitPrice: component.price
+          });
+        }
+      });
+    });
+    
+    return Array.from(componentMap.values());
+  }
+
+  // Exportar múltiplos produtos (exportação cruzada) - COLUNAS ATUALIZADAS
   exportCrossProducts(
     selectedProducts: Product[], 
     components: Component[],
@@ -229,33 +267,35 @@ class ExportService {
     // Mesclar componentes de todos os produtos
     const mergedComponents = this.mergeProductComponents(selectedProducts, components);
     
-    // Dados para planilha principal
+    // Dados para planilha principal com NOVAS COLUNAS
     const mainData = mergedComponents.map((mergedComp, index) => {
       const component = components.find(c => c.id === mergedComp.componentId);
       if (!component) return null;
       
+      const needToBuy = Math.max(0, mergedComp.totalQuantity - component.quantityInStock);
+      
       const row: any = {
         'ORDEM': index + 1,
-        'GRUPO': component.group || '',
-        'DEVICE': component.device || '',
-        'VALUE': component.value || '',
-        'PACKAGE': component.package || '',
-        'CÓDIGO': component.internalCode || '',
-        'QTD TOTAL': mergedComp.totalQuantity,
-        'PRODUTOS': mergedComp.products.join(', ')
+        'QTD': mergedComp.totalQuantity,
+        'GRUPO': mergedComp.group || '',
+        'DEVICE': mergedComp.device || '',
+        'VALUE': mergedComp.value || '',
+        'PACKAGE': mergedComp.package || '',
+        'GAVETA': mergedComp.drawer || '',
+        'DIVISÃO': mergedComp.division || '',
+        'QTD ESTOQUE': component.quantityInStock,
+        'QTD COMPRAR': needToBuy,
+        'UNIDADE': mergedComp.products.join(', ')
       };
       
       if (includeValues && component.price) {
-        row['VALOR UNIT.'] = formatCurrency(component.price);
-        row['VALOR TOTAL'] = formatCurrency(component.price * mergedComp.totalQuantity);
+        row['PREÇO TOTAL'] = formatCurrency(component.price * mergedComp.totalQuantity);
       }
       
       return row;
     }).filter(Boolean);
     
     const wsMain = XLSX.utils.json_to_sheet(mainData);
-    
-    // Usar larguras automáticas
     wsMain['!cols'] = this.generateAutoColumnWidths(mainData);
     
     XLSX.utils.book_append_sheet(wb, wsMain, 'Componentes Consolidados');
@@ -266,18 +306,24 @@ class ExportService {
         const component = components.find(c => c.id === pc.componentId);
         if (!component) return null;
         
+        const needToBuy = Math.max(0, pc.quantity - component.quantityInStock);
+        
         const row: any = {
           'ORDEM': index + 1,
+          'QTD UTILIZADA': pc.quantity,
           'GRUPO': component.group || '',
           'DEVICE': component.device || '',
           'VALUE': component.value || '',
           'PACKAGE': component.package || '',
-          'QUANTIDADE': pc.quantity
+          'CARACTERÍSTICAS': component.characteristics || '',
+          'GAVETA': component.drawer || '',
+          'DIVISÃO': component.division || '',
+          'QTD. ESTOQUE': component.quantityInStock,
+          'QTD. COMPRAR': needToBuy
         };
         
         if (includeValues && component.price) {
-          row['VALOR UNIT.'] = formatCurrency(component.price);
-          row['VALOR TOTAL'] = formatCurrency(component.price * pc.quantity);
+          row['PREÇO TOTAL'] = formatCurrency(component.price * pc.quantity);
         }
         
         return row;
@@ -286,16 +332,37 @@ class ExportService {
       const wsProduct = XLSX.utils.json_to_sheet(productData);
       wsProduct['!cols'] = this.generateAutoColumnWidths(productData);
       
-      const sheetName = product.name.substring(0, 30).replace(/[^a-zA-Z0-9 ]/g, '');
+      // Nome da aba limitado a 31 caracteres (limite do Excel)
+      const sheetName = product.name.substring(0, 31);
       XLSX.utils.book_append_sheet(wb, wsProduct, sheetName);
     });
     
+    // Adicionar resumo geral
+    const summaryData: SummaryData = {
+      'Total de Produtos': selectedProducts.length,
+      'Total de Componentes Únicos': mergedComponents.length,
+      'Total de Unidades': mergedComponents.reduce((sum, mc) => sum + mc.totalQuantity, 0),
+      'Data': new Date().toLocaleDateString('pt-BR'),
+      'Hora': new Date().toLocaleTimeString('pt-BR')
+    };
+    
+    if (includeValues) {
+      const totalValue = mergedComponents.reduce((sum, mc) => {
+        const component = components.find(c => c.id === mc.componentId);
+        return sum + ((component?.price || 0) * mc.totalQuantity);
+      }, 0);
+      summaryData['Valor Total'] = formatCurrency(totalValue);
+    }
+    
+    const wsSummary = XLSX.utils.json_to_sheet([summaryData]);
+    XLSX.utils.book_append_sheet(wb, wsSummary, 'Resumo');
+    
     // Gerar arquivo
-    const fileName = `exportacao_cruzada_${new Date().getTime()}.xlsx`;
+    const fileName = `exportacao_cruzada_${selectedProducts.length}_produtos_${new Date().getTime()}.xlsx`;
     XLSX.writeFile(wb, fileName);
   }
 
-  // Exportar lista de compras
+  // Exportar lista de compras (MANTIDO EXATAMENTE COMO ESTAVA)
   exportPurchaseList(alertedComponents: AlertedComponent[]) {
     const wb = XLSX.utils.book_new();
     
@@ -357,40 +424,6 @@ class ExportService {
     // Gerar arquivo
     const fileName = `lista_compras_${new Date().getTime()}.xlsx`;
     XLSX.writeFile(wb, fileName);
-  }
-
-  // Método auxiliar para mesclar componentes
-  private mergeProductComponents(products: Product[], components: Component[]): MergedComponent[] {
-    const componentMap = new Map<number, MergedComponent>();
-    
-    products.forEach(product => {
-      product.components.forEach(pc => {
-        if (componentMap.has(pc.componentId)) {
-          const existing = componentMap.get(pc.componentId)!;
-          existing.totalQuantity += pc.quantity;
-          existing.products.push(product.name);
-        } else {
-          const component = components.find(c => c.id === pc.componentId);
-          componentMap.set(pc.componentId, {
-            componentId: pc.componentId,
-            componentName: component?.name || pc.componentName,
-            group: component?.group || pc.group,
-            device: component?.device,
-            value: component?.value,
-            package: component?.package,
-            characteristics: component?.characteristics,
-            internalCode: component?.internalCode,
-            drawer: component?.drawer,
-            division: component?.division,
-            totalQuantity: pc.quantity,
-            products: [product.name],
-            unitPrice: component?.price
-          });
-        }
-      });
-    });
-    
-    return Array.from(componentMap.values());
   }
 }
 

@@ -1,69 +1,62 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Plus, 
-  Search, 
-  Pencil, 
-  Trash2, 
+import {
   Package,
-  Cpu,
-  Calendar,
-  ChevronDown,
-  ChevronUp,
+  Plus,
+  Search,
+  Pencil,
+  Trash2,
   FileSpreadsheet,
-  X,
-  GripVertical,
-  Check,
+  ChevronDown,
+  Calendar,
+  AlertCircle,
+  Cpu,
   CheckSquare,
   Square,
-  FileX
+  Grid,
+  X
 } from 'lucide-react';
+import { Product, Component, ProductWithPriority } from '../../types';
 import productsService from '../../services/products.service';
 import componentsService from '../../services/components.service';
 import exportService from '../../services/export.service';
-import { Product, Component, ProductWithPriority, MergedComponent } from '../../types';
-import { formatDate, formatCurrency } from '../../utils/helpers';
-import { PAGINATION } from '../../utils/constants';
-import * as XLSX from 'xlsx';
-import LoadingSpinner from '../../components/common/LoadingSpinner';
-import ConfirmModal from '../../components/common/ConfirmModal';
+import PageHeader from '../../components/common/PageHeader';
 import ErrorMessage from '../../components/common/ErrorMessage';
 import SuccessMessage from '../../components/common/SuccessMessage';
+import ConfirmModal from '../../components/common/ConfirmModal';
+import LoadingSpinner from '../../components/common/LoadingSpinner';
+import Pagination from '../../components/common/Pagination';
+import TableWrapper from '../../components/common/TableWrapper';
 import ExportModal from '../../components/modals/ExportModal';
 import CrossExportModal from '../../components/modals/CrossExportModal';
-import PageHeader from '../../components/common/PageHeader';
-import EmptyState from '../../components/common/EmptyState';
-import TableWrapper from '../../components/common/TableWrapper';
-import Pagination from '../../components/common/Pagination';
+import { formatCurrency, formatDate } from '../../utils/helpers';
+import { PAGINATION } from '../../utils/constants';
 
-// Componente de Relatório de Produção
+// Componente inline para o relatório de produção expandido
 const ProductionReport: React.FC<{
   product: Product;
   components: Component[];
   onExport: () => void;
 }> = ({ product, components, onExport }) => {
   const [quantity, setQuantity] = useState(1);
-
+  
   const getComponentDetails = (componentId: number) => {
     return components.find(c => c.id === componentId);
   };
-
+  
   const calculateTotal = () => {
-    return product.components.reduce((sum, pc) => {
+    return product.components.reduce((total, pc) => {
       const component = getComponentDetails(pc.componentId);
-      const price = component?.price || 0;
-      return sum + (price * pc.quantity * quantity);
+      if (!component) return total;
+      return total + ((component.price || 0) * pc.quantity * quantity);
     }, 0);
   };
 
   return (
-    <div className="p-6 bg-gray-50 border-t border-gray-200">
-      <div className="mb-6">
+    <div className="bg-gray-50 p-6 border-t">
+      <div className="space-y-4">
         <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-lg font-semibold text-gray-800">Relatório de Produção</h3>
-            <p className="text-sm text-gray-500">Análise de componentes necessários</p>
-          </div>
+          <h4 className="text-sm font-semibold text-gray-700">Relatório de Produção</h4>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <label className="text-sm font-medium text-gray-700">Quantidade a produzir:</label>
@@ -89,11 +82,12 @@ const ProductionReport: React.FC<{
           <table className="min-w-full">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Componente</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Device/Value</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cód. Interno</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Grupo</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Device</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Value</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Package</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Localização</th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Qtd/Un</th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Qtd/Uni</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Total</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Estoque</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Comprar</th>
@@ -109,17 +103,15 @@ const ProductionReport: React.FC<{
                 const totalNeeded = pc.quantity * quantity;
                 const needToBuy = Math.max(0, totalNeeded - component.quantityInStock);
                 const totalPrice = (component.price || 0) * pc.quantity * quantity;
+                const location = [component.drawer, component.division].filter(Boolean).join(' / ') || '-';
 
                 return (
                   <tr key={index}>
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{pc.componentName}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">
-                      {component.device && component.value ? `${component.device} / ${component.value}` : '-'}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{component.internalCode || '-'}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">
-                      {component.drawer && component.division ? `${component.drawer}/${component.division}` : '-'}
-                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-900">{component.group || '-'}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{component.device || '-'}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{component.value || '-'}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{component.package || '-'}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{location}</td>
                     <td className="px-4 py-3 text-sm text-center">{pc.quantity}</td>
                     <td className="px-4 py-3 text-sm text-center font-medium">{totalNeeded}</td>
                     <td className="px-4 py-3 text-sm text-center">{component.quantityInStock}</td>
@@ -127,7 +119,7 @@ const ProductionReport: React.FC<{
                       {needToBuy > 0 ? (
                         <span className="text-red-600 font-medium">{needToBuy}</span>
                       ) : (
-                        <span className="text-green-600 font-medium">OK</span>
+                        <span className="text-green-600 font-medium">0</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-sm text-right">{formatCurrency(component.price || 0)}</td>
@@ -138,7 +130,7 @@ const ProductionReport: React.FC<{
             </tbody>
             <tfoot className="bg-gray-50">
               <tr>
-                <td colSpan={9} className="px-4 py-3 text-sm font-medium text-right">Total Geral:</td>
+                <td colSpan={10} className="px-4 py-3 text-sm font-medium text-right">Total Geral:</td>
                 <td className="px-4 py-3 text-sm font-bold text-right">{formatCurrency(calculateTotal())}</td>
               </tr>
             </tfoot>
@@ -209,19 +201,19 @@ const ProductsListPage: React.FC = () => {
   };
 
   const handleConfirmExport = (includeValues: boolean, productionQuantity: number = 1) => {
-  if (!selectedProduct) return;
+    if (!selectedProduct) return;
 
-  exportService.exportProductWithCustomOrder(
-    selectedProduct,
-    components,
-    componentOrder,
-    productionQuantity,
-    includeValues
-  );
-  
-  setSuccess('Relatório exportado com sucesso!');
-  setExportModalOpen(false);
-};
+    exportService.exportProductWithCustomOrder(
+      selectedProduct,
+      components,
+      componentOrder,
+      productionQuantity,
+      includeValues
+    );
+    
+    setSuccess('Relatório exportado com sucesso!');
+    setExportModalOpen(false);
+  };
 
   const handleDelete = async () => {
     if (!deleteModal.product) return;
@@ -233,46 +225,31 @@ const ProductsListPage: React.FC = () => {
       setDeleteModal({ show: false });
     } catch (error) {
       setError('Erro ao excluir produto');
+      console.error(error);
     }
   };
 
   const calculateProductTotal = (product: Product) => {
-    return product.components.reduce((sum, pc) => {
+    return product.components.reduce((total, pc) => {
       const component = components.find(c => c.id === pc.componentId);
-      const price = component?.price || 0;
-      return sum + (price * pc.quantity);
+      if (!component) return total;
+      return total + ((component.price || 0) * pc.quantity);
     }, 0);
   };
 
-  const filteredProducts = products.filter(p =>
-    p.name.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredProducts = products.filter(product =>
+    product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (product.description && product.description.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  // Paginação local
-  const startIndex = (pageNumber - 1) * pageSize;
-  const endIndex = startIndex + pageSize;
-  const paginatedProducts = filteredProducts.slice(startIndex, endIndex);
-
-  const handlePageChange = (page: number) => {
-    setPageNumber(page);
-  };
-
-  const handlePageSizeChange = (newPageSize: number) => {
-    setPageSize(newPageSize);
-    setPageNumber(1);
-  };
-
-  // Funções de seleção múltipla
   const handleSelectProduct = (productId: number) => {
-    setSelectedProducts(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(productId)) {
-        newSet.delete(productId);
-      } else {
-        newSet.add(productId);
-      }
-      return newSet;
-    });
+    const newSelected = new Set(selectedProducts);
+    if (newSelected.has(productId)) {
+      newSelected.delete(productId);
+    } else {
+      newSelected.add(productId);
+    }
+    setSelectedProducts(newSelected);
   };
 
   const handleSelectAll = () => {
@@ -284,92 +261,95 @@ const ProductsListPage: React.FC = () => {
   };
 
   const handleCrossExport = () => {
-    if (selectedProducts.size < 2) {
-      setError('Selecione pelo menos 2 produtos para exportação cruzada');
+    if (selectedProducts.size === 0) {
+      setError('Selecione pelo menos um produto para exportação cruzada');
       return;
     }
     setShowCrossExportModal(true);
   };
 
-  
-const handleConfirmCrossExport = (
-  productQuantities: { [productId: number]: number },
-  mergedComponents: any[],
-  componentOrder: number[],
-  includeValues: boolean
-) => {
-  const selectedProds = products.filter(p => selectedProducts.has(p.id));
-  
-  // Chamar o método com apenas 3 parâmetros como esperado
-  exportService.exportCrossProducts(
-    selectedProds,
-    components,
-    includeValues
+  const handleConfirmCrossExport = (
+    productQuantities: { [key: number]: number },
+    mergedComponents: any[],
+    componentOrder: number[],
+    includeValues: boolean
+  ) => {
+    const selectedProductsData = products.filter(p => selectedProducts.has(p.id));
+    
+    exportService.exportCrossProducts(
+      selectedProductsData,
+      components,
+      productQuantities,
+      mergedComponents,
+      componentOrder,
+      includeValues
+    );
+    
+    setSuccess('Relatório de exportação cruzada gerado com sucesso!');
+    setShowCrossExportModal(false);
+    setSelectedProducts(new Set());
+  };
+
+  // Paginação
+  const totalPages = Math.ceil(filteredProducts.length / pageSize);
+  const paginatedProducts = filteredProducts.slice(
+    (pageNumber - 1) * pageSize,
+    pageNumber * pageSize
   );
-  
-  setSuccess('Exportação cruzada realizada com sucesso!');
-  setShowCrossExportModal(false);
-  setSelectedProducts(new Set());
-};
+
+  const handlePageChange = (page: number) => {
+    setPageNumber(page);
+    setExpandedProductId(null);
+  };
+
+  const handlePageSizeChange = (size: number) => {
+    setPageSize(size);
+    setPageNumber(1);
+    setExpandedProductId(null);
+  };
 
   const pageActions = (
-    <div className="flex items-center gap-2">
+    <>
       <button
         onClick={() => navigate('/products/new')}
-        className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-sm"
+        className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-200"
       >
         <Plus size={18} />
         <span className="font-medium">Novo Produto</span>
       </button>
       
       {selectedProducts.size > 0 && (
-        <>
-          <button
-            onClick={handleCrossExport}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg transition-all duration-200 ${
-              selectedProducts.size >= 2
-                ? 'bg-purple-600 text-white hover:bg-purple-700'
-                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-            }`}
-            disabled={selectedProducts.size < 2}
-          >
-            <FileX size={18} />
-            <span className="font-medium">Exportação Cruzada ({selectedProducts.size})</span>
-          </button>
-          
-          <button
-            onClick={() => setSelectedProducts(new Set())}
-            className="px-4 py-2.5 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg"
-          >
-            Limpar Seleção
-          </button>
-        </>
+        <button
+          onClick={handleCrossExport}
+          className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-lg hover:from-purple-600 hover:to-purple-700 transition-all duration-200"
+        >
+          <Grid size={18} />
+          <span className="font-medium">Exportação Cruzada ({selectedProducts.size})</span>
+        </button>
       )}
-    </div>
+    </>
   );
 
   return (
     <div className="p-6">
-      {/* Header */}
       <PageHeader
         title="Produtos"
-        subtitle="Gerencie os produtos montados"
+        subtitle="Gerencie produtos e suas composições"
         icon={Package}
-        iconColor="from-green-500 to-green-600"
+        iconColor="from-purple-500 to-purple-600"
         actions={pageActions}
       />
 
-      {/* Messages */}
       {error && <ErrorMessage message={error} onClose={() => setError('')} className="mb-6" />}
       {success && <SuccessMessage message={success} onClose={() => setSuccess('')} className="mb-6" />}
 
       {/* Search */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+      <div className="mb-6">
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
           <input
             type="text"
-            placeholder="Buscar produtos por nome..."
+            placeholder="Buscar produtos..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
@@ -377,7 +357,6 @@ const handleConfirmCrossExport = (
         </div>
       </div>
 
-      {/* Products List */}
       <TableWrapper
         loading={loading}
         isEmpty={filteredProducts.length === 0}
@@ -527,8 +506,7 @@ const handleConfirmCrossExport = (
         onClose={() => setDeleteModal({ show: false })}
         onConfirm={handleDelete}
         title="Excluir Produto"
-        message={`Tem certeza que deseja excluir o produto "${deleteModal.product?.name}"? Esta ação não pode ser desfeita.`}
-        confirmText="Excluir"
+        message={`Tem certeza que deseja excluir o produto "${deleteModal.product?.name}"?`}
         type="danger"
       />
 
@@ -539,22 +517,20 @@ const handleConfirmCrossExport = (
           onClose={() => setExportModalOpen(false)}
           product={selectedProduct}
           components={components}
-          productOrder={componentOrder}
-          onUpdateOrder={setComponentOrder}
-          onConfirmExport={handleConfirmExport}
+          componentOrder={componentOrder}
+          onOrderChange={setComponentOrder}
+          onConfirm={handleConfirmExport}
         />
       )}
 
       {/* Cross Export Modal */}
-      {showCrossExportModal && (
-        <CrossExportModal
-          isOpen={showCrossExportModal}
-          onClose={() => setShowCrossExportModal(false)}
-          selectedProducts={products.filter(p => selectedProducts.has(p.id))}
-          components={components}
-          onConfirmExport={handleConfirmCrossExport}
-        />
-      )}
+      <CrossExportModal
+        isOpen={showCrossExportModal}
+        onClose={() => setShowCrossExportModal(false)}
+        selectedProducts={products.filter(p => selectedProducts.has(p.id))}
+        components={components}
+        onConfirmExport={handleConfirmCrossExport}
+      />
     </div>
   );
 };

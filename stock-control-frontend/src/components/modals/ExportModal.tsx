@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, TrendingDown, AlertTriangle } from 'lucide-react';
+import { DollarSign, TrendingDown, AlertTriangle, Check } from 'lucide-react';
 import BaseModal from '../common/BaseModal';
 import ConfirmModal from '../common/ConfirmModal';
 import { Product, Component } from '../../types';
@@ -139,20 +139,20 @@ const ExportModal: React.FC<ExportModalProps> = ({
       size="xl"
     >
       <div className="p-4">
-        {/* Quantidade a produzir */}
-        <div className="mb-4">
-          <div className="flex items-center gap-4">
-            <label className="text-sm font-medium text-gray-700">
-              Quantidade a Produzir:
-            </label>
-            <input
-              type="number"
-              min="1"
-              value={productionQuantity}
-              onChange={(e) => setProductionQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-              className="w-20 px-2 py-1 text-center border border-gray-300 rounded focus:border-blue-500"
-            />
-          </div>
+        <p className="text-sm text-gray-500 mb-3">
+          Produto selecionado: <span className="font-medium">1</span>
+        </p>
+        
+        {/* Quantidade a produzir inline */}
+        <div className="mb-3 flex items-center gap-2">
+          <span className="text-sm font-medium text-gray-700">Quantidade a Produzir:</span>
+          <input
+            type="number"
+            min="1"
+            value={productionQuantity}
+            onChange={(e) => setProductionQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+            className="w-20 px-2 py-1 text-center border border-gray-300 rounded focus:border-blue-500"
+          />
         </div>
 
         {/* Checkbox incluir valores */}
@@ -167,9 +167,6 @@ const ExportModal: React.FC<ExportModalProps> = ({
             <span className="text-sm text-gray-700 flex items-center gap-1">
               <DollarSign size={16} />
               Incluir valores (R$)?
-            </span>
-            <span className="text-xs text-gray-500 ml-2">
-              Marque para incluir os preços dos componentes no relatório
             </span>
           </label>
         </div>
@@ -191,128 +188,143 @@ const ExportModal: React.FC<ExportModalProps> = ({
 
         {/* Ordem dos Componentes */}
         <div className="mb-4">
-          <h3 className="text-sm font-medium text-gray-700 mb-3">Ordem dos Componentes</h3>
+          <h3 className="text-sm font-medium text-gray-700 mb-2">Ordem dos Componentes</h3>
           <div className="border border-gray-200 rounded-lg overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-3 py-2 text-left font-medium text-gray-700">ORDEM</th>
-                  <th className="px-3 py-2 text-left font-medium text-gray-700">QTD</th>
-                  <th className="px-3 py-2 text-left font-medium text-gray-700">DEVICE</th>
-                  <th className="px-3 py-2 text-left font-medium text-gray-700">VALUE</th>
-                  <th className="px-3 py-2 text-center font-medium text-gray-700">PACKAGE</th>
-                  <th className="px-3 py-2 text-center font-medium text-gray-700">CÓD.</th>
-                  <th className="px-3 py-2 text-center font-medium text-gray-700">GAVETA</th>
-                  <th className="px-3 py-2 text-center font-medium text-gray-700">ESTOQUE</th>
-                  <th className="px-3 py-2 text-center font-medium text-gray-700">COMPRAR</th>
-                  <th className="px-3 py-2 text-center font-medium text-gray-700">UNIDADE</th>
-                  {includeValues && (
-                    <th className="px-3 py-2 text-right font-medium text-gray-700">TOTAL</th>
-                  )}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {productOrder.map((componentId, index) => {
-                  const productComponent = getProductComponents().find(pc => pc.componentId === componentId);
-                  const component = getComponentDetails(componentId);
-                  
-                  if (!productComponent || !component) return null;
-                  
-                  const baseQuantity = productComponent.quantity;
-                  const totalQuantity = baseQuantity * productionQuantity;
-                  const needToBuy = Math.max(0, totalQuantity - component.quantityInStock);
-                  
-                  return (
-                    <tr key={componentId} className="hover:bg-gray-50">
-                      <td className="px-3 py-2">
-                        <input
-                          type="number"
-                          value={orderInputs[componentId] || index + 1}
-                          onChange={(e) => handleOrderChange(componentId, parseInt(e.target.value) || 1)}
-                          className="w-12 px-1 py-0.5 text-center border border-gray-300 rounded"
-                          min="1"
-                          max={productOrder.length}
-                        />
-                      </td>
-                      <td className="px-3 py-2 text-center">{baseQuantity}</td>
-                      <td className="px-3 py-2">{component.device || '-'}</td>
-                      <td className="px-3 py-2">{component.value || '-'}</td>
-                      <td className="px-3 py-2 text-center">{component.package || '-'}</td>
-                      <td className="px-3 py-2 text-center">{component.internalCode || '-'}</td>
-                      <td className="px-3 py-2 text-center">{component.drawer || '-'}</td>
-                      <td className="px-3 py-2 text-center">
-                        <span className={`font-medium ${
-                          component.quantityInStock < totalQuantity ? 'text-red-600' : 'text-green-600'
-                        }`}>
-                          {component.quantityInStock}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        {needToBuy > 0 && (
-                          <span className="text-orange-600 font-medium">{needToBuy}</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        {productionQuantity > 1 ? `1 × ${productionQuantity}` : '1'}
-                      </td>
-                      {includeValues && (
-                        <td className="px-3 py-2 text-right font-medium">
-                          R$ {((component.price || 0) * totalQuantity).toFixed(2)}
-                        </td>
-                      )}
-                    </tr>
-                  );
-                })}
-              </tbody>
-              {includeValues && (
-                <tfoot className="bg-gray-50 border-t-2 border-gray-200">
+            <div className="max-h-64 overflow-y-auto">
+              <table className="w-full text-xs">
+                <thead className="bg-gray-50 sticky top-0">
                   <tr>
-                    <td colSpan={10} className="px-3 py-2 text-right font-medium">
-                      Total Geral:
-                    </td>
-                    <td className="px-3 py-2 text-right font-bold text-green-600">
-                      R$ {getTotalValue().toFixed(2)}
-                    </td>
+                    <th className="px-2 py-2 text-left font-medium text-gray-700">ORDEM</th>
+                    <th className="px-2 py-2 text-center font-medium text-gray-700">QTD UTILIZADA</th>
+                    <th className="px-2 py-2 text-left font-medium text-gray-700">GRUPO</th>
+                    <th className="px-2 py-2 text-left font-medium text-gray-700">DEVICE</th>
+                    <th className="px-2 py-2 text-left font-medium text-gray-700">VALUE</th>
+                    <th className="px-2 py-2 text-center font-medium text-gray-700">PACKAGE</th>
+                    <th className="px-2 py-2 text-left font-medium text-gray-700">CARACTERÍSTICAS</th>
+                    <th className="px-2 py-2 text-center font-medium text-gray-700">GAVETA</th>
+                    <th className="px-2 py-2 text-center font-medium text-gray-700">DIVISÃO</th>
+                    <th className="px-2 py-2 text-center font-medium text-gray-700">QTD. ESTOQUE</th>
+                    <th className="px-2 py-2 text-center font-medium text-gray-700">QTD. COMPRAR</th>
+                    {includeValues && (
+                      <th className="px-2 py-2 text-right font-medium text-gray-700">PREÇO TOTAL</th>
+                    )}
                   </tr>
-                </tfoot>
-              )}
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {productOrder.map((componentId, index) => {
+                    const productComponent = getProductComponents().find(pc => pc.componentId === componentId);
+                    const component = getComponentDetails(componentId);
+                    
+                    if (!productComponent || !component) return null;
+                    
+                    const baseQuantity = productComponent.quantity;
+                    const totalQuantity = baseQuantity * productionQuantity;
+                    const needToBuy = Math.max(0, totalQuantity - component.quantityInStock);
+                    
+                    return (
+                      <tr key={componentId} className="hover:bg-gray-50">
+                        <td className="px-2 py-2">
+                          <input
+                            type="number"
+                            value={orderInputs[componentId] || index + 1}
+                            onChange={(e) => handleOrderChange(componentId, parseInt(e.target.value) || 1)}
+                            className="w-12 px-1 py-0.5 text-center border border-gray-300 rounded text-xs"
+                            min="1"
+                            max={productOrder.length}
+                          />
+                        </td>
+                        <td className="px-2 py-2 text-center">{totalQuantity}</td>
+                        <td className="px-2 py-2">{component.group || '-'}</td>
+                        <td className="px-2 py-2">{component.device || '-'}</td>
+                        <td className="px-2 py-2">{component.value || '-'}</td>
+                        <td className="px-2 py-2 text-center">{component.package || '-'}</td>
+                        <td className="px-2 py-2">{component.characteristics || '-'}</td>
+                        <td className="px-2 py-2 text-center">{component.drawer || '-'}</td>
+                        <td className="px-2 py-2 text-center">{component.division || '-'}</td>
+                        <td className="px-2 py-2 text-center">
+                          <span className={`font-medium ${
+                            component.quantityInStock < totalQuantity ? 'text-red-600' : 'text-green-600'
+                          }`}>
+                            {component.quantityInStock}
+                          </span>
+                        </td>
+                        <td className="px-2 py-2 text-center">
+                          {needToBuy > 0 ? (
+                            <span className="text-orange-600 font-medium">{needToBuy}</span>
+                          ) : '0'}
+                        </td>
+                        {includeValues && (
+                          <td className="px-2 py-2 text-right font-medium">
+                            R$ {((component.price || 0) * totalQuantity).toFixed(2)}
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                {includeValues && (
+                  <tfoot className="bg-gray-50 border-t-2 border-gray-200">
+                    <tr>
+                      <td colSpan={11} className="px-2 py-2 text-right font-medium">
+                        Total Geral:
+                      </td>
+                      <td className="px-2 py-2 text-right font-bold text-green-600">
+                        R$ {getTotalValue().toFixed(2)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          
+          {/* Botão Reordenar */}
+          <div className="mt-3">
+            <button
+              onClick={() => {/* lógica de reordenação se necessário */}}
+              className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+            >
+              Reordenar
+            </button>
           </div>
-          <div className="mt-2 flex justify-between items-center text-xs text-gray-500">
+          
+          <div className="mt-3 flex justify-between items-center text-xs text-gray-500">
             <span>Total de componentes únicos: {getTotalComponents()}</span>
-            <span>Total geral: {product?.components?.reduce((sum, pc) => sum + pc.quantity, 0) || 0} unidades</span>
+            <span>Total geral: {product?.components?.reduce((sum, pc) => sum + pc.quantity * productionQuantity, 0) || 0} unidades</span>
           </div>
-          <p className="mt-2 text-xs text-gray-500">
+          <p className="mt-1 text-xs text-gray-500">
             Nota: Componentes iguais foram agrupados e suas quantidades somadas.
           </p>
         </div>
+      </div>  
 
-        {/* Botões de ação */}
-        <div className="flex justify-between pt-4 border-t">
-          <div className="flex gap-2">
-            <button
-              onClick={handleConfirm}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
-            >
-              <DollarSign size={18} />
-              Exportar Excel
-            </button>
-            <button
-              onClick={() => setShowStockConfirm(true)}
-              className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors flex items-center gap-2"
-            >
-              <TrendingDown size={18} />
-              Dar Baixa no Estoque
-            </button>
-          </div>
+      {/* Botões de ação */}
+      <div className="p-4 border-t border-gray-200 flex justify-between">
+        <button
+          onClick={() => setShowStockConfirm(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded bg-red-600 text-white hover:bg-red-700"
+          title="Dar baixa no estoque"
+        >
+          <TrendingDown size={16} />
+          Dar Baixa no Estoque
+        </button>
+        
+        <div className="flex gap-2">
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+            className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded"
           >
             Cancelar
           </button>
+          <button
+            onClick={handleConfirm}
+            className="flex items-center gap-1 px-3 py-1.5 text-sm bg-purple-600 text-white rounded hover:bg-purple-700"
+          >
+            <Check size={16} />
+            Exportar
+          </button>
         </div>
       </div>
+    </div>
 
       {/* Modal de confirmação de baixa */}
       <ConfirmModal
