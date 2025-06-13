@@ -542,13 +542,7 @@ const handleConfirmExport = (includeValues: boolean, productionQuantity: number 
                             <div className="flex items-center gap-3">
                               <Cpu className="text-gray-400 flex-shrink-0" size={20} />
                               <div className="flex-1">
-                                <p className="text-sm font-medium text-gray-900">
-                                  {component.name}
-                                  {component.internalCode && (
-                                    <span className="text-gray-500 ml-2">({component.internalCode})</span>
-                                  )}
-                                </p>
-                                <div className="flex flex-wrap gap-2 mt-1">
+                                  <div className="flex flex-wrap gap-2 mt-1">
                                   <span className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded">
                                     {component.group}
                                   </span>
@@ -670,12 +664,6 @@ const handleConfirmExport = (includeValues: boolean, productionQuantity: number 
                       <div className="flex items-start gap-3">
                         <Cpu className="text-gray-400 mt-1 flex-shrink-0" size={20} />
                         <div className="flex-1">
-                          <p className="font-medium text-gray-900">
-                            {component.name}
-                            {component.internalCode && (
-                              <span className="text-gray-500 ml-2">({component.internalCode})</span>
-                            )}
-                          </p>
                           <div className="flex flex-wrap gap-2 mt-1">
                             <span className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded">
                               {component.group}
@@ -750,89 +738,98 @@ const handleConfirmExport = (includeValues: boolean, productionQuantity: number 
         </div>
 
         {/* Production Report */}
-        {showProductionReport && productionCalc.length > 0 && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-lg font-semibold text-gray-800">Relatório de Produção</h2>
-                <p className="text-sm text-gray-500">Análise de componentes necessários</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <label className="text-sm font-medium text-gray-700">
-                  Quantidade a produzir:
-                </label>
-                <input
-                  type="number"
-                  value={productionQuantity}
-                  onChange={(e) => setProductionQuantity(Math.max(1, Number(e.target.value)))}
-                  className="w-20 px-3 py-1.5 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                  min="1"
-                />
-              </div>
-            </div>
+{showProductionReport && productionCalc.length > 0 && (
+  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+    <div className="flex items-center justify-between mb-6">
+      <div>
+        <h2 className="text-lg font-semibold text-gray-800">Relatório de Produção</h2>
+        <p className="text-sm text-gray-500">Análise de componentes necessários</p>
+      </div>
+      <div className="flex items-center gap-2">
+        <label className="text-sm font-medium text-gray-700">
+          Quantidade a produzir:
+        </label>
+        <input
+          type="number"
+          value={productionQuantity}
+          onChange={(e) => setProductionQuantity(Math.max(1, Number(e.target.value)))}
+          className="w-20 px-3 py-1.5 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+          min="1"
+        />
+      </div>
+    </div>
 
-            <div className="overflow-x-auto">
-              <table className="min-w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Componente</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Device/Value</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cód. Interno</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Localização</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Qtd/Un</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Estoque</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Comprar</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Preço Unit.</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {productionCalc.map((calc) => (
-                    <tr key={calc.componentId}>
-                      <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                        {calc.componentName}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">
-                        {[calc.device, calc.value].filter(Boolean).join(' / ') || '-'}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">
-                        {calc.internalCode || '-'}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">
-                        {calc.drawer && calc.division ? `${calc.drawer}/${calc.division}` : '-'}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-right">{calc.quantityPerUnit}</td>
-                      <td className="px-4 py-3 text-sm text-right font-medium">{calc.totalRequired}</td>
-                      <td className="px-4 py-3 text-sm text-right">{calc.currentStock}</td>
-                      <td className={`px-4 py-3 text-sm text-right font-medium ${
-                        calc.suggestedPurchase > 0 ? 'text-red-600' : 'text-green-600'
-                      }`}>
-                        {calc.suggestedPurchase > 0 ? calc.suggestedPurchase : 'OK'}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-right">
-                        {formatCurrency(calc.unitPrice)}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-right font-medium">
-                        {formatCurrency(calc.totalPrice)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot className="bg-gray-50">
-                  <tr>
-                    <td colSpan={9} className="px-4 py-3 text-sm font-medium text-right">
-                      Total Geral:
-                    </td>
-                    <td className="px-4 py-3 text-sm font-bold text-right">
-                      {formatCurrency(getTotalCost())}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </div>
-        )}
+    <div className="overflow-x-auto">
+      <table className="min-w-full">
+        <thead className="bg-gray-50 border-b border-gray-200">
+          <tr>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Grupo</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Device</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Value</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Package</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Características</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Gaveta</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Divisão</th>
+            <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Qtd. Estoque</th>
+            <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Qtd. Comprar</th>
+            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Preço Total</th>
+          </tr>
+        </thead>
+        <tbody className="bg-white divide-y divide-gray-200">
+          {productionCalc.map((calc) => {
+            const component = getComponent(calc.componentId);
+            return (
+              <tr key={calc.componentId}>
+                <td className="px-4 py-3 text-sm text-gray-900">
+                  {component?.group || '-'}
+                </td>
+                <td className="px-4 py-3 text-sm text-gray-600">
+                  {calc.device || '-'}
+                </td>
+                <td className="px-4 py-3 text-sm text-gray-600">
+                  {calc.value || '-'}
+                </td>
+                <td className="px-4 py-3 text-sm text-gray-600">
+                  {calc.package || '-'}
+                </td>
+                <td className="px-4 py-3 text-sm text-gray-600">
+                  {calc.characteristics || '-'}
+                </td>
+                <td className="px-4 py-3 text-sm text-gray-600">
+                  {calc.drawer || '-'}
+                </td>
+                <td className="px-4 py-3 text-sm text-gray-600">
+                  {calc.division || '-'}
+                </td>
+                <td className="px-4 py-3 text-sm text-center">
+                  {calc.currentStock}
+                </td>
+                <td className={`px-4 py-3 text-sm text-center font-medium ${
+                  calc.suggestedPurchase > 0 ? 'text-red-600' : 'text-green-600'
+                }`}>
+                  {calc.suggestedPurchase > 0 ? calc.suggestedPurchase : 'OK'}
+                </td>
+                <td className="px-4 py-3 text-sm text-right font-medium">
+                  {formatCurrency(calc.totalPrice)}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+        <tfoot className="bg-gray-50">
+          <tr>
+            <td colSpan={9} className="px-4 py-3 text-sm font-medium text-right">
+              Total Geral:
+            </td>
+            <td className="px-4 py-3 text-sm font-bold text-right">
+              {formatCurrency(getTotalCost())}
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+)}
 
         {/* Actions */}
         <div className="flex justify-end gap-3">

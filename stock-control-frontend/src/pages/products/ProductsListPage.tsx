@@ -276,12 +276,10 @@ const ProductsListPage: React.FC = () => {
   ) => {
     const selectedProductsData = products.filter(p => selectedProducts.has(p.id));
     
+    // Método exportCrossProducts espera apenas 3 parâmetros
     exportService.exportCrossProducts(
       selectedProductsData,
       components,
-      productQuantities,
-      mergedComponents,
-      componentOrder,
       includeValues
     );
     
@@ -517,9 +515,9 @@ const ProductsListPage: React.FC = () => {
           onClose={() => setExportModalOpen(false)}
           product={selectedProduct}
           components={components}
-          componentOrder={componentOrder}
-          onOrderChange={setComponentOrder}
-          onConfirm={handleConfirmExport}
+          productOrder={componentOrder}
+          onUpdateOrder={setComponentOrder}
+          onConfirmExport={handleConfirmExport}
         />
       )}
 
