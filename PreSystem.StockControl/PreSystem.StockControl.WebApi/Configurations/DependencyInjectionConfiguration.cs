@@ -15,7 +15,6 @@ namespace PreSystem.StockControl.WebApi.Configurations
             services.AddDbContext<StockControlDbContext>(options =>
             options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
 
-
             // Repositórios
             services.AddScoped<IComponentRepository, ComponentRepository>();
             services.AddScoped<IProductRepository, ProductRepository>();
@@ -23,7 +22,6 @@ namespace PreSystem.StockControl.WebApi.Configurations
             services.AddScoped<IStockMovementRepository, StockMovementRepository>();
             services.AddScoped<IStockAlertRepository, StockAlertRepository>();
             services.AddScoped<IPasswordResetTokenRepository, PasswordResetTokenRepository>();
-
 
             // Repositórios de Hierarquia
             services.AddScoped<IComponentGroupRepository, ComponentGroupRepository>();
@@ -36,9 +34,9 @@ namespace PreSystem.StockControl.WebApi.Configurations
             services.AddScoped<IProductService, ProductService>();
             services.AddScoped<IStockMovementService, StockMovementService>();
             services.AddScoped<IStockAlertService, StockAlertService>();
+            services.AddScoped<IAlertManagerService, AlertManagerService>(); // NOVO
             services.AddScoped<IGroupHierarchyService, GroupHierarchyService>();
             services.AddScoped<IEmailService, EmailService>();
-
 
             return services;
         }

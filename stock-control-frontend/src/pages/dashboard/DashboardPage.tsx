@@ -15,7 +15,6 @@ interface DashboardStats {
   totalProducts: number;
   lowStockItems: number;
   todayMovements: number;
-  totalUsers?: number;
 }
 
 const DashboardPage: React.FC = () => {
@@ -25,7 +24,6 @@ const DashboardPage: React.FC = () => {
     totalProducts: 0,
     lowStockItems: 0,
     todayMovements: 0,
-    totalUsers: 0
   });
   const [alerts, setAlerts] = useState<StockAlert[]>([]);
   const [movements, setMovements] = useState<StockMovement[]>([]);
@@ -62,7 +60,6 @@ const DashboardPage: React.FC = () => {
         totalProducts: productsData.length,
         lowStockItems: lowStock,
         todayMovements: todayMovs,
-        totalUsers: isAdmin ? 5 : undefined // Mock for now
       });
 
       setAlerts(alertsData);
@@ -123,72 +120,6 @@ const DashboardPage: React.FC = () => {
         <AlertsList alerts={alerts} loading={loading} />
         <RecentMovements movements={movements} loading={loading} />
       </div>
-
-      {/* Admin Stats */}
-      {isAdmin && (
-        <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6">
-          <StatsCard
-            title="Usuários Ativos"
-            value={stats.totalUsers || 0}
-            icon={Users}
-            iconBgColor="bg-indigo-100"
-            iconColor="text-indigo-600"
-          />
-          
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Atividade do Sistema</h3>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Entradas hoje</span>
-                <span className="text-sm font-medium text-green-600 flex items-center gap-1">
-                  <ArrowUp size={16} />
-                  12
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Saídas hoje</span>
-                <span className="text-sm font-medium text-red-600 flex items-center gap-1">
-                  <ArrowDown size={16} />
-                  8
-                </span>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Taxa de Ocupação</h3>
-            <div className="relative h-32">
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-center">
-                  <p className="text-3xl font-bold text-gray-800">72%</p>
-                  <p className="text-sm text-gray-500">do estoque</p>
-                </div>
-              </div>
-              <svg className="w-full h-full transform -rotate-90">
-                <circle
-                  cx="64"
-                  cy="64"
-                  r="56"
-                  stroke="currentColor"
-                  strokeWidth="8"
-                  fill="none"
-                  className="text-gray-200"
-                />
-                <circle
-                  cx="64"
-                  cy="64"
-                  r="56"
-                  stroke="currentColor"
-                  strokeWidth="8"
-                  fill="none"
-                  strokeDasharray={`${2 * Math.PI * 56 * 0.72} ${2 * Math.PI * 56}`}
-                  className="text-blue-600"
-                />
-              </svg>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

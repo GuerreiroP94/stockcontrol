@@ -5,18 +5,22 @@ using PreSystem.StockControl.Application.Interfaces.Services;
 using PreSystem.StockControl.Domain.Entities;
 using PreSystem.StockControl.Domain.Interfaces.Repositories;
 
-
 namespace PreSystem.StockControl.Application.Services
 {
     // Serviço responsável pelas regras de negócio dos Componentes
     public class ComponentService : IComponentService
     {
         private readonly IComponentRepository _componentRepository;
+        private readonly IAlertManagerService _alertManager;
         private readonly ILogger<ComponentService> _logger;
 
-        public ComponentService(IComponentRepository componentRepository, ILogger<ComponentService> logger)
+        public ComponentService(
+            IComponentRepository componentRepository,
+            IAlertManagerService alertManager,
+            ILogger<ComponentService> logger)
         {
             _componentRepository = componentRepository;
+            _alertManager = alertManager;
             _logger = logger;
         }
 
@@ -47,56 +51,47 @@ namespace PreSystem.StockControl.Application.Services
 
             await _componentRepository.AddAsync(component);
 
-            _logger.LogInformation("Componente criado: {Nome}, Grupo: {Grupo}, Device: {Device}, Quantidade: {Quantidade}",
-                component.Name, component.Group, component.Device, component.QuantityInStock);
+            _logger.LogInformation("Componente criado: {Nome}, Estoque inicial: {Quantidade}",
+                component.Name, component.QuantityInStock);
+
+            // Verificar se precisa criar alerta
+            await _alertManager.CheckAndUpdateAlertsForComponentAsync(component.Id);
 
             return MapToDto(component);
         }
 
-        // Retorna todos os componentes como uma lista de DTOs
+        // Retorna todos os componentes
         public async Task<IEnumerable<ComponentDto>> GetAllComponentsAsync(ComponentFilterDto filter)
         {
-            var query = await _componentRepository.GetAllAsync();
+            var components = await _componentRepository.GetAllAsync();
 
-            // Aplica filtros se existirem
-            if (!string.IsNullOrWhiteSpace(filter.Name))
-                query = query.Where(c => c.Name.Contains(filter.Name, StringComparison.OrdinalIgnoreCase));
-
+            // Aplicar filtros se existirem
             if (!string.IsNullOrWhiteSpace(filter.Group))
-                query = query.Where(c => c.Group.Contains(filter.Group, StringComparison.OrdinalIgnoreCase));
+                components = components.Where(c => c.Group == filter.Group);
 
             if (!string.IsNullOrWhiteSpace(filter.Device))
-                query = query.Where(c => c.Device != null && c.Device.Contains(filter.Device, StringComparison.OrdinalIgnoreCase));
-
-            if (!string.IsNullOrWhiteSpace(filter.Package))
-                query = query.Where(c => c.Package != null && c.Package.Contains(filter.Package, StringComparison.OrdinalIgnoreCase));
+                components = components.Where(c => c.Device == filter.Device);
 
             if (!string.IsNullOrWhiteSpace(filter.Value))
-                query = query.Where(c => c.Value != null && c.Value.Contains(filter.Value, StringComparison.OrdinalIgnoreCase));
+                components = components.Where(c => c.Value == filter.Value);
 
-            // IMPORTANTE: Adicionar suporte ao SearchTerm (busca geral)
+            if (!string.IsNullOrWhiteSpace(filter.Package))
+                components = components.Where(c => c.Package == filter.Package);
+
             if (!string.IsNullOrWhiteSpace(filter.SearchTerm))
             {
-                query = query.Where(c =>
-                    c.Name.Contains(filter.SearchTerm, StringComparison.OrdinalIgnoreCase) ||
-                    (c.Description != null && c.Description.Contains(filter.SearchTerm, StringComparison.OrdinalIgnoreCase)) ||
-                    (c.InternalCode != null && c.InternalCode.Contains(filter.SearchTerm, StringComparison.OrdinalIgnoreCase)) ||
-                    (c.Device != null && c.Device.Contains(filter.SearchTerm, StringComparison.OrdinalIgnoreCase)) ||
-                    (c.Value != null && c.Value.Contains(filter.SearchTerm, StringComparison.OrdinalIgnoreCase)) ||
-                    (c.Package != null && c.Package.Contains(filter.SearchTerm, StringComparison.OrdinalIgnoreCase)) ||
-                    (c.Characteristics != null && c.Characteristics.Contains(filter.SearchTerm, StringComparison.OrdinalIgnoreCase))
+                var searchLower = filter.SearchTerm.ToLower();
+                components = components.Where(c =>
+                    c.Name.ToLower().Contains(searchLower) ||
+                    (c.InternalCode != null && c.InternalCode.ToLower().Contains(searchLower)) ||
+                    (c.Description != null && c.Description.ToLower().Contains(searchLower))
                 );
             }
 
-            // Aplica paginação
-            query = query
-                .Skip((filter.PageNumber - 1) * filter.PageSize)
-                .Take(filter.PageSize);
-
-            return query.Select(MapToDto);
+            return components.Select(MapToDto);
         }
 
-        // Retorna um único componente pelo ID como DTO
+        // Retorna um componente específico pelo ID
         public async Task<ComponentDto?> GetComponentByIdAsync(int id)
         {
             var component = await _componentRepository.GetByIdAsync(id);
@@ -132,6 +127,9 @@ namespace PreSystem.StockControl.Application.Services
 
             _logger.LogInformation("Componente atualizado: {Id}, Nome: {Nome}, Quantidade: {Quantidade}",
                 component.Id, component.Name, component.QuantityInStock);
+
+            // Verificar alertas após atualização
+            await _alertManager.CheckAndUpdateAlertsForComponentAsync(id);
 
             return MapToDto(component);
         }
@@ -182,7 +180,7 @@ namespace PreSystem.StockControl.Application.Services
             }
         }
 
-        // Método auxiliar para mapear Component para ComponentDto
+        // Método privado para mapear Entity para DTO
         private ComponentDto MapToDto(Component component)
         {
             return new ComponentDto
@@ -202,9 +200,6 @@ namespace PreSystem.StockControl.Application.Services
                 Division = component.Division,
                 NCM = component.NCM,
                 NVE = component.NVE,
-                LastEntryDate = component.LastEntryDate,
-                LastEntryQuantity = component.LastEntryQuantity,
-                LastExitQuantity = component.LastExitQuantity,
                 QuantityInStock = component.QuantityInStock,
                 MinimumQuantity = component.MinimumQuantity,
                 CreatedAt = component.CreatedAt,

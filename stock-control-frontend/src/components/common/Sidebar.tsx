@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   Package,
-  TrendingUpDown,
+  TrendingUp,
   AlertCircle,
   Users,
   ChevronLeft,
@@ -16,7 +16,6 @@ import {
   LogOut,
   User,
   Wrench,
-  Search,
   FileSpreadsheet
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -32,10 +31,57 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar }) => {
   const navigate = useNavigate();
   const [productsSubmenuOpen, setProductsSubmenuOpen] = useState(false);
   const [componentsSubmenuOpen, setComponentsSubmenuOpen] = useState(false);
+  const [hoveredMenu, setHoveredMenu] = useState<string | null>(null);
+  const [temporarilyOpen, setTemporarilyOpen] = useState(false);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+
+  // Auto-collapse sidebar quando mudar de rota
+  useEffect(() => {
+    if (isOpen) {
+      toggleSidebar();
+    }
+    // Reset submenus
+    setProductsSubmenuOpen(false);
+    setComponentsSubmenuOpen(false);
+  }, [location.pathname]);
+
+  // Handle click outside para fechar sidebar temporária
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (temporarilyOpen && sidebarRef.current && !sidebarRef.current.contains(event.target as Node)) {
+        setTemporarilyOpen(false);
+        setHoveredMenu(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [temporarilyOpen]);
 
   const handleLogout = () => {
     logout();
     navigate('/login');
+  };
+
+  const handleMenuItemClick = (item: any) => {
+    if (!isOpen && item.hasSubmenu) {
+      // Se sidebar está fechada e item tem submenu, abrir temporariamente
+      setTemporarilyOpen(true);
+      if (item.name === 'Produtos') {
+        setProductsSubmenuOpen(true);
+        setComponentsSubmenuOpen(false);
+      } else if (item.name === 'Componentes') {
+        setComponentsSubmenuOpen(true);
+        setProductsSubmenuOpen(false);
+      }
+    } else if (isOpen && item.hasSubmenu) {
+      // Comportamento normal quando sidebar está aberta
+      if (item.name === 'Produtos') {
+        setProductsSubmenuOpen(!productsSubmenuOpen);
+      } else if (item.name === 'Componentes') {
+        setComponentsSubmenuOpen(!componentsSubmenuOpen);
+      }
+    }
   };
 
   const menuItems = [
@@ -86,7 +132,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar }) => {
     {
       path: '/movements',
       name: 'Movimentações',
-      icon: TrendingUpDown,
+      icon: TrendingUp,
       show: true
     },
     {
@@ -107,7 +153,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar }) => {
   const isProductsActive = location.pathname.startsWith('/products');
   const isComponentsActive = location.pathname.startsWith('/components');
 
-  // Função para obter as iniciais do nome
   const getInitials = (name: string) => {
     return name
       .split(' ')
@@ -117,13 +162,18 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar }) => {
       .slice(0, 2);
   };
 
+  const effectivelyOpen = isOpen || temporarilyOpen;
+
   return (
-    <aside className={`fixed left-0 top-0 h-full bg-white shadow-lg transition-all duration-300 z-30 flex flex-col ${
-      isOpen ? 'w-64' : 'w-16'
-    }`}>
+    <aside 
+      ref={sidebarRef}
+      className={`fixed left-0 top-0 h-full bg-white shadow-lg transition-all duration-300 z-30 flex flex-col ${
+        effectivelyOpen ? 'w-64' : 'w-16'
+      }`}
+    >
       {/* Header com Logo */}
       <div className="h-16 flex items-center justify-between px-4 border-b border-gray-200">
-        {isOpen ? (
+        {effectivelyOpen ? (
           <>
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
@@ -131,12 +181,14 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar }) => {
               </div>
               <span className="font-bold text-gray-800">PreSystem</span>
             </div>
-            <button
-              onClick={toggleSidebar}
-              className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              <ChevronLeft size={20} />
-            </button>
+            {!temporarilyOpen && (
+              <button
+                onClick={toggleSidebar}
+                className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <ChevronLeft size={20} />
+              </button>
+            )}
           </>
         ) : (
           <button
@@ -150,12 +202,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar }) => {
 
       {/* User Avatar */}
       {user && (
-        <div className={`flex items-center ${isOpen ? 'px-4 py-4' : 'px-2 py-4 justify-center'} border-b border-gray-200`}>
+        <div className={`flex items-center ${effectivelyOpen ? 'px-4 py-4' : 'px-2 py-4 justify-center'} border-b border-gray-200`}>
           <div className="flex items-center">
             <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-semibold">
               {user.name ? getInitials(user.name) : <User size={20} />}
             </div>
-            {isOpen && (
+            {effectivelyOpen && (
               <div className="ml-3">
                 <p className="text-sm font-semibold text-gray-900">{user.name}</p>
                 <p className="text-xs text-gray-500">{user.email}</p>
@@ -173,26 +225,22 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar }) => {
               {item.hasSubmenu ? (
                 <>
                   <button
-                    onClick={() => {
-                      if (item.name === 'Produtos') {
-                        setProductsSubmenuOpen(!productsSubmenuOpen);
-                      } else if (item.name === 'Componentes') {
-                        setComponentsSubmenuOpen(!componentsSubmenuOpen);
-                      }
-                    }}
-                    className={`w-full flex items-center ${isOpen ? 'justify-between' : 'justify-center'} gap-3 px-3 py-2.5 rounded-lg transition-all duration-200
+                    onClick={() => handleMenuItemClick(item)}
+                    onMouseEnter={() => !effectivelyOpen && setHoveredMenu(item.name)}
+                    onMouseLeave={() => !effectivelyOpen && setHoveredMenu(null)}
+                    className={`w-full flex items-center ${effectivelyOpen ? 'justify-between' : 'justify-center'} gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 relative
                       ${(item.name === 'Produtos' && isProductsActive) || (item.name === 'Componentes' && isComponentsActive)
                         ? 'bg-blue-50 text-blue-600' 
                         : 'text-gray-700 hover:bg-gray-100'
                       }
                     `}
-                    title={!isOpen ? item.name : undefined}
+                    title={!effectivelyOpen ? item.name : undefined}
                   >
-                    <div className={`flex items-center ${isOpen ? 'gap-3' : ''}`}>
+                    <div className={`flex items-center ${effectivelyOpen ? 'gap-3' : ''}`}>
                       <item.icon size={20} />
-                      {isOpen && <span className="font-medium">{item.name}</span>}
+                      {effectivelyOpen && <span className="font-medium">{item.name}</span>}
                     </div>
-                    {isOpen && (
+                    {effectivelyOpen && (
                       <ChevronDown 
                         size={16} 
                         className={`transition-transform duration-200 ${
@@ -202,9 +250,28 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar }) => {
                         }`}
                       />
                     )}
+                    
+                    {/* Hover tooltip com submenu quando sidebar está fechada */}
+                    {!effectivelyOpen && hoveredMenu === item.name && (
+                      <div className="absolute left-full ml-2 bg-white shadow-lg rounded-lg py-2 w-56 z-50">
+                        <div className="px-3 py-2 font-medium text-gray-900 border-b border-gray-100">
+                          {item.name}
+                        </div>
+                        {item.submenu?.map((subItem) => (
+                          <NavLink
+                            key={subItem.path}
+                            to={subItem.path}
+                            className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                          >
+                            <subItem.icon size={16} />
+                            <span>{subItem.name}</span>
+                          </NavLink>
+                        ))}
+                      </div>
+                    )}
                   </button>
                   
-                  {isOpen && item.submenu && (
+                  {effectivelyOpen && item.submenu && (
                     (item.name === 'Produtos' && productsSubmenuOpen) || 
                     (item.name === 'Componentes' && componentsSubmenuOpen)
                   ) && (
@@ -233,16 +300,16 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar }) => {
                 <NavLink
                   to={item.path}
                   className={({ isActive }) => `
-                    flex items-center ${isOpen ? 'gap-3' : 'justify-center'} px-3 py-2.5 rounded-lg transition-all duration-200
+                    flex items-center ${effectivelyOpen ? 'gap-3' : 'justify-center'} px-3 py-2.5 rounded-lg transition-all duration-200
                     ${isActive 
                       ? 'bg-blue-50 text-blue-600 font-medium' 
                       : 'text-gray-700 hover:bg-gray-100'
                     }
                   `}
-                  title={!isOpen ? item.name : undefined}
+                  title={!effectivelyOpen ? item.name : undefined}
                 >
                   <item.icon size={20} />
-                  {isOpen && <span>{item.name}</span>}
+                  {effectivelyOpen && <span>{item.name}</span>}
                 </NavLink>
               )}
             </div>
@@ -257,31 +324,31 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar }) => {
           <NavLink
             to="/settings"
             className={({ isActive }) => `
-              flex items-center ${isOpen ? 'gap-3' : 'justify-center'} px-3 py-2.5 rounded-lg transition-all duration-200
+              flex items-center ${effectivelyOpen ? 'gap-3' : 'justify-center'} px-3 py-2.5 rounded-lg transition-all duration-200
               ${isActive 
                 ? 'bg-blue-50 text-blue-600' 
                 : 'text-gray-700 hover:bg-gray-100'
               }
             `}
-            title={!isOpen ? "Configurações" : undefined}
+            title={!effectivelyOpen ? "Configurações" : undefined}
           >
             <Settings size={20} />
-            {isOpen && <span className="font-medium">Configurações</span>}
+            {effectivelyOpen && <span className="font-medium">Configurações</span>}
           </NavLink>
 
           {/* Logout */}
           <button
             onClick={handleLogout}
-            className={`w-full flex items-center ${isOpen ? 'gap-3' : 'justify-center'} px-3 py-2.5 rounded-lg text-red-600 hover:bg-red-50 hover:text-red-700 transition-all duration-200`}
-            title={!isOpen ? "Sair" : undefined}
+            className={`w-full flex items-center ${effectivelyOpen ? 'gap-3' : 'justify-center'} px-3 py-2.5 rounded-lg text-red-600 hover:bg-red-50 hover:text-red-700 transition-all duration-200`}
+            title={!effectivelyOpen ? "Sair" : undefined}
           >
             <LogOut size={20} />
-            {isOpen && <span className="font-medium">Sair</span>}
+            {effectivelyOpen && <span className="font-medium">Sair</span>}
           </button>
         </div>
 
         {/* Footer - apenas quando expandido */}
-        {isOpen && (
+        {effectivelyOpen && !temporarilyOpen && (
           <div className="px-4 py-3 bg-gray-50 border-t border-gray-200">
             <div className="text-xs text-gray-500 text-center">
               <p>© 2024 PreSystem</p>

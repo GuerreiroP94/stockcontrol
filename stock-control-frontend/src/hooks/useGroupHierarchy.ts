@@ -1,38 +1,35 @@
 import { useState, useEffect } from 'react';
 import { GroupItem } from '../types';
+import groupHierarchyService from '../services/groupHierarchy.service';
 
 export const useGroupHierarchy = () => {
   const [groups, setGroups] = useState<GroupItem[]>([]);
   const [devices, setDevices] = useState<GroupItem[]>([]);
   const [values, setValues] = useState<GroupItem[]>([]);
   const [packages, setPackages] = useState<GroupItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Simula dados do backend - substitua com chamadas reais da API
+  // Carregar toda hierarquia ao inicializar
   useEffect(() => {
-    // Exemplo de dados
-    setGroups([
-      { id: 1, name: 'Resistor' },
-      { id: 2, name: 'Capacitor' },
-      { id: 3, name: 'CI' },
-    ]);
-    
-    setDevices([
-      { id: 1, name: 'SMD', groupId: 1 },
-      { id: 2, name: 'PTH', groupId: 1 },
-      { id: 3, name: 'Cerâmico', groupId: 2 },
-    ]);
-    
-    setValues([
-      { id: 1, name: '10K', groupId: 1, deviceId: 1 },
-      { id: 2, name: '100K', groupId: 1, deviceId: 1 },
-      { id: 3, name: '100nF', groupId: 2, deviceId: 3 },
-    ]);
-    
-    setPackages([
-      { id: 1, name: '0805', groupId: 1, deviceId: 1, valueId: 1 },
-      { id: 2, name: '1206', groupId: 1, deviceId: 1, valueId: 1 },
-    ]);
+    loadFullHierarchy();
   }, []);
+
+  const loadFullHierarchy = async () => {
+    try {
+      setLoading(true);
+      const data = await groupHierarchyService.getFullHierarchy();
+      setGroups(data.groups);
+      setDevices(data.devices);
+      setValues(data.values);
+      setPackages(data.packages);
+    } catch (error) {
+      console.error('Erro ao carregar hierarquia:', error);
+      setError('Erro ao carregar dados da hierarquia');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const getFilteredDevices = (groupId?: number) => {
     if (!groupId) return devices;
@@ -54,71 +51,143 @@ export const useGroupHierarchy = () => {
     return filtered;
   };
 
-  const addGroup = (name: string) => {
-    const newGroup: GroupItem = { id: Date.now(), name };
-    setGroups([...groups, newGroup]);
-    return newGroup;
-  };
-
-  const addDevice = (name: string, groupId: number) => {
-    const newDevice: GroupItem = { id: Date.now(), name, groupId };
-    setDevices([...devices, newDevice]);
-    return newDevice;
-  };
-
-  const addValue = (name: string, groupId: number, deviceId: number) => {
-    const newValue: GroupItem = { id: Date.now(), name, groupId, deviceId };
-    setValues([...values, newValue]);
-    return newValue;
-  };
-
-  const addPackage = (name: string, groupId: number, deviceId: number, valueId: number) => {
-    const newPackage: GroupItem = { id: Date.now(), name, groupId, deviceId, valueId };
-    setPackages([...packages, newPackage]);
-    return newPackage;
-  };
-
-  const updateItem = (type: 'group' | 'device' | 'value' | 'package', id: number, name: string) => {
-    switch (type) {
-      case 'group':
-        setGroups(groups.map(g => g.id === id ? { ...g, name } : g));
-        break;
-      case 'device':
-        setDevices(devices.map(d => d.id === id ? { ...d, name } : d));
-        break;
-      case 'value':
-        setValues(values.map(v => v.id === id ? { ...v, name } : v));
-        break;
-      case 'package':
-        setPackages(packages.map(p => p.id === id ? { ...p, name } : p));
-        break;
+  const addGroup = async (name: string) => {
+    try {
+      const result = await groupHierarchyService.createGroup(name);
+      if (result.success && result.item) {
+        setGroups([...groups, result.item]);
+        return result.item;
+      }
+      throw new Error(result.message || 'Erro ao criar grupo');
+    } catch (error) {
+      console.error('Erro ao criar grupo:', error);
+      throw error;
     }
   };
 
-  const deleteItem = (type: 'group' | 'device' | 'value' | 'package', id: number) => {
-    switch (type) {
-      case 'group':
-        setGroups(groups.filter(g => g.id !== id));
-        // Remove dependent items
-        const deviceIds = devices.filter(d => d.groupId === id).map(d => d.id);
-        setDevices(devices.filter(d => d.groupId !== id));
-        setValues(values.filter(v => v.groupId !== id));
-        setPackages(packages.filter(p => p.groupId !== id));
-        break;
-      case 'device':
-        setDevices(devices.filter(d => d.id !== id));
-        // Remove dependent items
-        setValues(values.filter(v => v.deviceId !== id));
-        setPackages(packages.filter(p => p.deviceId !== id));
-        break;
-      case 'value':
-        setValues(values.filter(v => v.id !== id));
-        // Remove dependent items
-        setPackages(packages.filter(p => p.valueId !== id));
-        break;
-      case 'package':
-        setPackages(packages.filter(p => p.id !== id));
-        break;
+  const addDevice = async (name: string, groupId: number) => {
+    try {
+      const result = await groupHierarchyService.createDevice(groupId, name);
+      if (result.success && result.item) {
+        setDevices([...devices, result.item]);
+        return result.item;
+      }
+      throw new Error(result.message || 'Erro ao criar device');
+    } catch (error) {
+      console.error('Erro ao criar device:', error);
+      throw error;
+    }
+  };
+
+  const addValue = async (name: string, groupId: number, deviceId: number) => {
+    try {
+      const result = await groupHierarchyService.createValue(deviceId, name);
+      if (result.success && result.item) {
+        // Adicionar groupId ao item retornado
+        const newValue = { ...result.item, groupId };
+        setValues([...values, newValue]);
+        return newValue;
+      }
+      throw new Error(result.message || 'Erro ao criar value');
+    } catch (error) {
+      console.error('Erro ao criar value:', error);
+      throw error;
+    }
+  };
+
+  const addPackage = async (name: string, groupId: number, deviceId: number, valueId: number) => {
+    try {
+      const result = await groupHierarchyService.createPackage(valueId, name);
+      if (result.success && result.item) {
+        // Adicionar groupId e deviceId ao item retornado
+        const newPackage = { ...result.item, groupId, deviceId };
+        setPackages([...packages, newPackage]);
+        return newPackage;
+      }
+      throw new Error(result.message || 'Erro ao criar package');
+    } catch (error) {
+      console.error('Erro ao criar package:', error);
+      throw error;
+    }
+  };
+
+  const updateItem = async (type: 'group' | 'device' | 'value' | 'package', id: number, name: string) => {
+    try {
+      let result;
+      switch (type) {
+        case 'group':
+          result = await groupHierarchyService.updateGroup(id, name);
+          if (result.success) {
+            setGroups(groups.map(g => g.id === id ? { ...g, name } : g));
+          }
+          break;
+        case 'device':
+          result = await groupHierarchyService.updateDevice(id, name);
+          if (result.success) {
+            setDevices(devices.map(d => d.id === id ? { ...d, name } : d));
+          }
+          break;
+        case 'value':
+          result = await groupHierarchyService.updateValue(id, name);
+          if (result.success) {
+            setValues(values.map(v => v.id === id ? { ...v, name } : v));
+          }
+          break;
+        case 'package':
+          result = await groupHierarchyService.updatePackage(id, name);
+          if (result.success) {
+            setPackages(packages.map(p => p.id === id ? { ...p, name } : p));
+          }
+          break;
+      }
+    } catch (error) {
+      console.error(`Erro ao atualizar ${type}:`, error);
+      throw error;
+    }
+  };
+
+  const deleteItem = async (type: 'group' | 'device' | 'value' | 'package', id: number) => {
+    try {
+      let result;
+      switch (type) {
+        case 'group':
+          result = await groupHierarchyService.deleteGroup(id);
+          if (result.success) {
+            setGroups(groups.filter(g => g.id !== id));
+            // Remove items dependentes
+            const deviceIds = devices.filter(d => d.groupId === id).map(d => d.id);
+            setDevices(devices.filter(d => d.groupId !== id));
+            setValues(values.filter(v => v.groupId !== id));
+            setPackages(packages.filter(p => p.groupId !== id));
+          }
+          break;
+        case 'device':
+          result = await groupHierarchyService.deleteDevice(id);
+          if (result.success) {
+            setDevices(devices.filter(d => d.id !== id));
+            // Remove items dependentes
+            setValues(values.filter(v => v.deviceId !== id));
+            setPackages(packages.filter(p => p.deviceId !== id));
+          }
+          break;
+        case 'value':
+          result = await groupHierarchyService.deleteValue(id);
+          if (result.success) {
+            setValues(values.filter(v => v.id !== id));
+            // Remove items dependentes
+            setPackages(packages.filter(p => p.valueId !== id));
+          }
+          break;
+        case 'package':
+          result = await groupHierarchyService.deletePackage(id);
+          if (result.success) {
+            setPackages(packages.filter(p => p.id !== id));
+          }
+          break;
+      }
+    } catch (error) {
+      console.error(`Erro ao deletar ${type}:`, error);
+      throw error;
     }
   };
 
@@ -127,6 +196,8 @@ export const useGroupHierarchy = () => {
     devices,
     values,
     packages,
+    loading,
+    error,
     getFilteredDevices,
     getFilteredValues,
     getFilteredPackages,
@@ -136,5 +207,6 @@ export const useGroupHierarchy = () => {
     addPackage,
     updateItem,
     deleteItem,
+    reloadHierarchy: loadFullHierarchy
   };
 };

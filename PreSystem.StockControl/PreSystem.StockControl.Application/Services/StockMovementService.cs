@@ -14,19 +14,22 @@ namespace PreSystem.StockControl.Application.Services
         private readonly IStockMovementRepository _movementRepository;
         private readonly IStockAlertRepository _alertRepository;
         private readonly IComponentRepository _componentRepository;
+        private readonly IAlertManagerService _alertManager;
         private readonly IUserContextService _userContextService;
-        private readonly ILogger<StockMovementService> _logger; // Logger para registrar ações e erros
+        private readonly ILogger<StockMovementService> _logger;
 
         public StockMovementService(
             IStockMovementRepository movementRepository,
             IStockAlertRepository alertRepository,
             IComponentRepository componentRepository,
+            IAlertManagerService alertManager,
             IUserContextService userContextService,
-            ILogger<StockMovementService> logger) // Injeção do logger
+            ILogger<StockMovementService> logger)
         {
             _movementRepository = movementRepository;
             _alertRepository = alertRepository;
             _componentRepository = componentRepository;
+            _alertManager = alertManager;
             _userContextService = userContextService;
             _logger = logger;
         }
@@ -46,129 +49,92 @@ namespace PreSystem.StockControl.Application.Services
                     MovementType = dto.MovementType,
                     QuantityChanged = dto.Quantity,
                     PerformedAt = DateTime.UtcNow,
-                    PerformedBy = _userContextService.GetCurrentUsername() ?? "Desconhecido",
+                    PerformedBy = _userContextService.GetCurrentUsername() ?? "System",
                     UserId = userId
                 };
 
                 await _movementRepository.AddAsync(movement);
 
-                _logger.LogInformation("Movimentação registrada: {Quantidade} unidades do componente {ComponenteId} por {Usuario}",
-                    movement.QuantityChanged, movement.ComponentId, movement.PerformedBy);
-
-                // Se for uma saída, verifica se o estoque está abaixo do mínimo
-                if (dto.Quantity < 0)
+                // Após registrar a movimentação, busca o componente para atualizar estoque
+                var component = await _componentRepository.GetByIdAsync(dto.ComponentId);
+                if (component != null)
                 {
-                    var component = await _componentRepository.GetByIdAsync(dto.ComponentId);
-                    if (component != null && component.QuantityInStock < component.MinimumQuantity)
+                    // Atualiza o estoque do componente
+                    if (dto.MovementType == "Entrada")
                     {
-                        var alert = new StockAlert
-                        {
-                            ComponentId = component.Id,
-                            Message = $"Estoque baixo: {component.Name} está com {component.QuantityInStock} unidades.",
-                            CreatedAt = DateTime.UtcNow
-                        };
-
-                        await _alertRepository.AddAsync(alert);
+                        component.QuantityInStock += dto.Quantity;
                     }
+                    else if (dto.MovementType == "Saida")
+                    {
+                        // Verifica se há estoque suficiente
+                        if (component.QuantityInStock < dto.Quantity)
+                        {
+                            throw new InvalidOperationException($"Estoque insuficiente. Disponível: {component.QuantityInStock}");
+                        }
+                        component.QuantityInStock -= dto.Quantity;
+                    }
+
+                    component.UpdatedAt = DateTime.UtcNow;
+                    await _componentRepository.UpdateAsync(component);
+
+                    // Verificar alertas após movimentação
+                    await _alertManager.CheckAndUpdateAlertsForComponentAsync(component.Id);
+
+                    _logger.LogInformation(
+                        "Movimentação registrada: ComponenteId={ComponentId}, Tipo={Tipo}, Quantidade={Quantidade}, NovoEstoque={NovoEstoque}",
+                        dto.ComponentId, dto.MovementType, dto.Quantity, component.QuantityInStock);
                 }
 
-                return new StockMovementDto
-                {
-                    Id = movement.Id,
-                    ComponentId = movement.ComponentId,
-                    MovementType = movement.MovementType,
-                    Quantity = movement.QuantityChanged,
-                    MovementDate = movement.PerformedAt,
-                    PerformedBy = movement.PerformedBy,
-                    UserId = movement.UserId
-                };
+                // Recupera a movimentação criada com os relacionamentos
+                var createdMovement = await _movementRepository.GetByIdAsync(movement.Id);
+                return MapToDto(createdMovement);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro ao registrar movimentação para o componente {ComponentId}", dto.ComponentId);
+                _logger.LogError(ex, "Erro ao registrar movimentação para ComponenteId={ComponentId}", dto.ComponentId);
                 throw;
             }
         }
 
-        // Retorna todas as movimentações como DTO com filtros e paginação
+        // Retorna todas as movimentações baseadas nos parâmetros
         public async Task<IEnumerable<StockMovementDto>> GetAllMovementsAsync(StockMovementQueryParameters parameters)
-        {
-            var allMovements = await _movementRepository.GetAllAsync();
-            var filtered = allMovements.AsQueryable();
-
-            if (parameters.ComponentId.HasValue)
-                filtered = filtered.Where(m => m.ComponentId == parameters.ComponentId.Value);
-
-            if (!string.IsNullOrEmpty(parameters.MovementType))
-                filtered = filtered.Where(m => m.MovementType == parameters.MovementType);
-
-            if (parameters.StartDate.HasValue)
-                filtered = filtered.Where(m => m.PerformedAt >= parameters.StartDate.Value);
-
-            if (parameters.EndDate.HasValue)
-                filtered = filtered.Where(m => m.PerformedAt <= parameters.EndDate.Value);
-
-            // Paginação
-            var skip = (parameters.Page - 1) * parameters.PageSize;
-            var paged = filtered.Skip(skip).Take(parameters.PageSize);
-
-            _logger.LogInformation("Movimentações listadas com filtros: ComponentId={ComponentId}, MovementType={MovementType}, Page={Page}, PageSize={PageSize}",
-                parameters.ComponentId, parameters.MovementType, parameters.Page, parameters.PageSize);
-
-            return paged.Select(m => new StockMovementDto
-            {
-                Id = m.Id,
-                ComponentId = m.ComponentId,
-                ComponentName = m.Component.Name,
-                MovementType = m.MovementType,
-                Quantity = m.QuantityChanged,
-                MovementDate = m.PerformedAt,
-                PerformedBy = m.PerformedBy,
-                UserId = m.UserId
-            }).ToList();
-        }
-
-        // Retorna uma movimentação específica pelo ID
-        public async Task<StockMovementDto?> GetMovementByIdAsync(int id)
-        {
-            var movement = await _movementRepository.GetByIdAsync(id);
-            if (movement == null) return null;
-
-            _logger.LogInformation("Movimentação ID {Id} consultada por {Usuario}", id, _userContextService.GetCurrentUsername());
-
-            return new StockMovementDto
-            {
-                Id = movement.Id,
-                ComponentId = movement.ComponentId,
-                MovementType = movement.MovementType,
-                Quantity = movement.QuantityChanged,
-                MovementDate = movement.PerformedAt,
-                PerformedBy = movement.PerformedBy,
-                UserName = movement.User?.Name
-            };
-        }
-
-        // Retorna todas as movimentações de um componente específico
-        public async Task<IEnumerable<StockMovementDto>> GetByComponentIdAsync(int componentId)
         {
             var movements = await _movementRepository.GetAllAsync();
 
-            return movements
-                .Where(m => m.ComponentId == componentId)
+            // Aplica filtros
+            if (parameters.ComponentId.HasValue)
+                movements = movements.Where(m => m.ComponentId == parameters.ComponentId.Value);
+
+            if (!string.IsNullOrEmpty(parameters.MovementType))
+                movements = movements.Where(m => m.MovementType == parameters.MovementType);
+
+            if (parameters.FromDate.HasValue)
+                movements = movements.Where(m => m.PerformedAt >= parameters.FromDate.Value);
+
+            if (parameters.ToDate.HasValue)
+                movements = movements.Where(m => m.PerformedAt <= parameters.ToDate.Value);
+
+            // Ordenação e paginação
+            movements = movements
                 .OrderByDescending(m => m.PerformedAt)
-                .Select(m => new StockMovementDto
-                {
-                    Id = m.Id,
-                    ComponentId = m.ComponentId,
-                    ComponentName = m.Component?.Name ?? "Unknown",
-                    MovementType = m.MovementType,
-                    Quantity = m.QuantityChanged,
-                    MovementDate = m.PerformedAt,
-                    PerformedBy = m.PerformedBy,
-                    UserId = m.UserId,
-                    UserName = m.User?.Name ?? m.PerformedBy
-                })
-                .ToList();
+                .Skip((parameters.Page - 1) * parameters.PageSize)
+                .Take(parameters.PageSize);
+
+            return movements.Select(MapToDto);
+        }
+
+        // Retorna uma movimentação por ID
+        public async Task<StockMovementDto?> GetMovementByIdAsync(int id)
+        {
+            var movement = await _movementRepository.GetByIdAsync(id);
+            return movement == null ? null : MapToDto(movement);
+        }
+
+        // Retorna movimentações de um componente específico
+        public async Task<IEnumerable<StockMovementDto>> GetByComponentIdAsync(int componentId)
+        {
+            var movements = await _movementRepository.GetByComponentIdAsync(componentId);
+            return movements.Select(MapToDto);
         }
 
         // Registra múltiplas movimentações de uma vez (movimentação em massa)
@@ -182,6 +148,9 @@ namespace PreSystem.StockControl.Application.Services
                 Errors = new List<string>(),
                 AlertsGenerated = new List<int>()
             };
+
+            // Coletar IDs únicos dos componentes afetados
+            var affectedComponentIds = new HashSet<int>();
 
             try
             {
@@ -213,7 +182,7 @@ namespace PreSystem.StockControl.Application.Services
                             MovementType = movement.MovementType,
                             QuantityChanged = movement.Quantity,
                             PerformedAt = DateTime.UtcNow,
-                            PerformedBy = _userContextService.GetCurrentUsername() ?? "Sistema",
+                            PerformedBy = _userContextService.GetCurrentUsername() ?? "System",
                             UserId = _userContextService.GetCurrentUserId()
                         };
 
@@ -223,59 +192,70 @@ namespace PreSystem.StockControl.Application.Services
                         if (movement.MovementType == "Entrada")
                         {
                             component.QuantityInStock += movement.Quantity;
-                            component.LastEntryDate = DateTime.UtcNow;
-                            component.LastEntryQuantity = movement.Quantity;
                         }
                         else if (movement.MovementType == "Saida")
                         {
                             component.QuantityInStock -= movement.Quantity;
-                            component.LastExitQuantity = movement.Quantity;
                         }
 
                         component.UpdatedAt = DateTime.UtcNow;
                         await _componentRepository.UpdateAsync(component);
 
-                        // Verifica se precisa gerar alerta
-                        if (component.QuantityInStock <= component.MinimumQuantity)
-                        {
-                            var alert = new StockAlert
-                            {
-                                ComponentId = component.Id,
-                                Message = component.QuantityInStock == 0
-                                    ? $"CRÍTICO: {component.Name} está com estoque zerado!"
-                                    : $"Estoque baixo: {component.Name} está com apenas {component.QuantityInStock} unidades (mínimo: {component.MinimumQuantity})",
-                                CreatedAt = DateTime.UtcNow
-                            };
-
-                            await _alertRepository.AddAsync(alert);
-                            result.AlertsGenerated.Add(alert.Id);
-                        }
+                        // Adicionar à lista de componentes afetados
+                        affectedComponentIds.Add(movement.ComponentId);
 
                         result.SuccessCount++;
 
                         _logger.LogInformation(
-                            "Movimentação em massa registrada: {Tipo} de {Quantidade} unidades do componente {ComponenteId}",
-                            movement.MovementType, movement.Quantity, movement.ComponentId
-                        );
+                            "Movimentação em massa registrada: ComponenteId={ComponentId}, Tipo={Tipo}, Quantidade={Quantidade}",
+                            movement.ComponentId, movement.MovementType, movement.Quantity);
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Erro ao processar movimentação do componente {ComponentId}", movement.ComponentId);
                         result.Errors.Add($"Erro ao processar componente {movement.ComponentId}: {ex.Message}");
                         result.ErrorCount++;
+                        _logger.LogError(ex, "Erro ao processar movimentação em massa para ComponenteId={ComponentId}", movement.ComponentId);
                     }
                 }
 
+                // Verificar alertas para todos os componentes afetados
+                foreach (var componentId in affectedComponentIds)
+                {
+                    await _alertManager.CheckAndUpdateAlertsForComponentAsync(componentId);
+                }
+
                 result.Success = result.ErrorCount == 0;
+                result.Message = result.Success
+                    ? $"{result.SuccessCount} movimentações registradas com sucesso"
+                    : $"{result.SuccessCount} movimentações registradas, {result.ErrorCount} erros encontrados";
+
                 return result;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Erro geral ao processar movimentações em massa");
                 result.Success = false;
-                result.Errors.Add($"Erro geral: {ex.Message}");
+                result.Message = "Erro ao processar movimentações em massa";
+                result.Errors.Add(ex.Message);
                 return result;
             }
+        }
+
+        // Método privado para mapear Entity para DTO
+        private StockMovementDto MapToDto(StockMovement movement)
+        {
+            return new StockMovementDto
+            {
+                Id = movement.Id,
+                ComponentId = movement.ComponentId,
+                ComponentName = movement.Component?.Name ?? "Unknown",
+                MovementType = movement.MovementType,
+                Quantity = movement.QuantityChanged,
+                MovementDate = movement.PerformedAt,
+                PerformedBy = movement.PerformedBy,
+                UserId = movement.UserId,
+                UserName = movement.User?.Name ?? movement.PerformedBy
+            };
         }
     }
 }
