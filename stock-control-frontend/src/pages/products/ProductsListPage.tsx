@@ -291,7 +291,8 @@ const ProductsListPage: React.FC = () => {
     setShowCrossExportModal(true);
   };
 
-  const handleConfirmCrossExport = (
+  
+const handleConfirmCrossExport = (
   productQuantities: { [productId: number]: number },
   mergedComponents: any[],
   componentOrder: number[],
@@ -299,12 +300,10 @@ const ProductsListPage: React.FC = () => {
 ) => {
   const selectedProds = products.filter(p => selectedProducts.has(p.id));
   
+  // Chamar o método com apenas 3 parâmetros como esperado
   exportService.exportCrossProducts(
     selectedProds,
     components,
-    productQuantities,
-    mergedComponents,
-    componentOrder,
     includeValues
   );
   

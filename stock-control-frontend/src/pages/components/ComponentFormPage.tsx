@@ -50,12 +50,6 @@ const ComponentFormPage: React.FC = () => {
   const [selectedDeviceId, setSelectedDeviceId] = useState<number | undefined>();
   const [selectedValueId, setSelectedValueId] = useState<number | undefined>();
 
-  useEffect(() => {
-    if (isEditing && id) {
-      fetchComponent(Number(id));
-    }
-  }, [id, isEditing, fetchComponent]);
-
   const fetchComponent = useCallback(async (componentId: number) => {
     try {
       setLoading(true);
@@ -99,6 +93,12 @@ const ComponentFormPage: React.FC = () => {
       setLoading(false);
     }
   }, [groups, devices, values]);
+
+  useEffect(() => {
+    if (isEditing && id) {
+      fetchComponent(Number(id));
+    }
+  }, [id, isEditing, fetchComponent]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -71,15 +71,10 @@ class OrderingService {
   }
 
   // Ordena componentes por ordem de inputs (para CrossExportModal)
-  sortByOrderInputs(componentOrder: number, orderInputs: number[]): number[] {
-    const orderMap = new Map<number, number>();
-    orderInputs.forEach((id, index) => {
-      orderMap.set(id, index + 1);
-    });
-    
-    return orderInputs.sort((a, b) => {
-      const orderA = orderMap.get(a) || 999;
-      const orderB = orderMap.get(b) || 999;
+  sortByOrderInputs(componentOrder: number[], orderInputs: { [key: number]: number }): number[] {
+    return componentOrder.sort((a, b) => {
+      const orderA = orderInputs[a] || 999;
+      const orderB = orderInputs[b] || 999;
       return orderA - orderB;
     });
   }
