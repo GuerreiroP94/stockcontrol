@@ -390,11 +390,7 @@ namespace PreSystem.StockControl.Application.Services
                 // Verificar e gerar alertas para componentes afetados
                 foreach (var componentId in affectedComponentIds)
                 {
-                    var component = await _componentRepository.GetByIdAsync(componentId);
-                    if (component != null && component.QuantityInStock <= component.MinimumQuantity)
-                    {
-                        await _alertManager.CheckAndCreateAlertAsync(componentId);
-                    }
+                    await _alertManager.CheckAndUpdateAlertsForComponentAsync(componentId);
                 }
 
                 // Adicionar mensagem final se houver componentes sem estoque

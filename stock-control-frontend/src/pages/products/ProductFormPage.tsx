@@ -23,8 +23,7 @@ import {
 import productsService from '../../services/products.service';
 import componentsService from '../../services/components.service';
 import exportService from '../../services/export.service';
-import { ProductCreate, Component, ProductComponentCreate, ComponentFilter } from '../../types';
-import { useAuth } from '../../contexts/AuthContext';
+import { ProductCreate, Component, ProductComponentCreate, ComponentFilter, Product, ProductComponent } from '../../types';import { useAuth } from '../../contexts/AuthContext';
 import { COMPONENT_GROUPS } from '../../utils/constants';
 import { formatCurrency } from '../../utils/helpers';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
@@ -307,8 +306,28 @@ const {
   };
 
 const handleConfirmExport = (includeValues: boolean, productionQuantity: number = 1) => {
+  // Converter ProductComponentCreate[] para ProductComponent[]
+  const productComponents: ProductComponent[] = formData.components.map(comp => {
+    const component = getComponent(comp.componentId);
+    return {
+      componentId: comp.componentId,
+      componentName: component?.name || 'Unknown',
+      group: component?.group || '',
+      quantity: comp.quantity
+    };
+  });
+
+  const productForExport: Product = {
+    id: 0, // ID temporário para novo produto
+    name: formData.name || 'Novo Produto',
+    description: formData.description,
+    createdAt: new Date().toISOString(),
+    createdBy: user?.name,
+    components: productComponents
+  };
+
   exportService.exportProductWithCustomOrder(
-    { name: formData.name || 'Novo Produto', components: formData.components },
+    productForExport,
     availableComponents,
     componentOrder,
     productionQuantity,
@@ -845,15 +864,30 @@ const handleConfirmExport = (includeValues: boolean, productionQuantity: number 
       </form>
 
       {/* Export Modal */}
-      <ExportModal
-        isOpen={exportModalOpen}
-        onClose={() => setExportModalOpen(false)}
-        product={{ name: formData.name, components: formData.components }}
-        components={availableComponents}
-        productOrder={componentOrder}
-        onUpdateOrder={setComponentOrder}
-        onConfirmExport={handleConfirmExport}
-      />
+<ExportModal
+  isOpen={exportModalOpen}
+  onClose={() => setExportModalOpen(false)}
+  product={{
+    id: 0,
+    name: formData.name || 'Novo Produto',
+    description: formData.description,
+    createdAt: new Date().toISOString(),
+    createdBy: user?.name,
+    components: formData.components.map(comp => {
+      const component = getComponent(comp.componentId);
+      return {
+        componentId: comp.componentId,
+        componentName: component?.name || 'Unknown',
+        group: component?.group || '',
+        quantity: comp.quantity
+      };
+    })
+  }}
+  components={availableComponents}
+  productOrder={componentOrder}
+  onUpdateOrder={setComponentOrder}
+  onConfirmExport={handleConfirmExport}
+/>
     </div>
   );
 };
