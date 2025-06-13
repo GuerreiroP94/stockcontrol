@@ -88,7 +88,8 @@ const AlertsPage: React.FC = () => {
       setComponents(componentsData);
       setAlertedComponents(alertedComps);
       
-      setTotalItems(alertsData.length === queryParams.pageSize ? queryParams.page * queryParams.pageSize + 1 : (queryParams.page - 1) * queryParams.pageSize + alertsData.length);
+      setTotalItems(alertsData.length === queryParams.pageSize ? 
+        queryParams.page * queryParams.pageSize + 1 : (queryParams.page - 1) * queryParams.pageSize + alertsData.length);
     } catch (error) {
       setError('Erro ao carregar alertas');
       console.error(error);
@@ -172,9 +173,8 @@ const AlertsPage: React.FC = () => {
   const filteredComponents = alertedComponents.filter(comp => {
     // Filtro por busca
     if (searchTerm && !(
-      comp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      comp.internalCode?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       comp.device?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      comp.internalCode?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       comp.value?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       comp.package?.toLowerCase().includes(searchTerm.toLowerCase())
     )) return false;
@@ -257,7 +257,6 @@ const AlertsPage: React.FC = () => {
         <StatsCard
           title="Alertas Críticos"
           value={criticalAlerts}
-          subtitle="Estoque zerado"
           icon={AlertTriangle}
           iconBgColor="bg-red-100"
           iconColor="text-red-600"
@@ -272,9 +271,8 @@ const AlertsPage: React.FC = () => {
         />
         
         <StatsCard
-          title="Valor Total Compra"
+          title="Valor Total Selecionado"
           value={formatCurrency(totalPurchaseValue)}
-          subtitle="Itens selecionados"
           icon={DollarSign}
           iconBgColor="bg-green-100"
           iconColor="text-green-600"
@@ -285,22 +283,19 @@ const AlertsPage: React.FC = () => {
       <FilterSection onClearFilters={clearFilters}>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           {/* Search */}
-          <div className="relative">
-            <Package className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-            <input
-              type="text"
-              placeholder="Buscar componente..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
-            />
-          </div>
+          <input
+            type="text"
+            placeholder="Buscar componente..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
+          />
 
           {/* Group Filter */}
           <select
             value={groupFilter}
             onChange={(e) => setGroupFilter(e.target.value)}
-            className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200 bg-white"
+            className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
           >
             <option value="">Todos os Grupos</option>
             {uniqueGroups.map(group => (
@@ -311,8 +306,8 @@ const AlertsPage: React.FC = () => {
           {/* Environment Filter */}
           <select
             value={environmentFilter}
-            onChange={(e) => setEnvironmentFilter(e.target.value as any)}
-            className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200 bg-white"
+            onChange={(e) => setEnvironmentFilter(e.target.value as 'all' | 'estoque' | 'laboratorio')}
+            className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
           >
             <option value="all">Todos os Ambientes</option>
             <option value="estoque">Estoque</option>
@@ -322,44 +317,48 @@ const AlertsPage: React.FC = () => {
           {/* Severity Filter */}
           <select
             value={severityFilter}
-            onChange={(e) => setSeverityFilter(e.target.value as any)}
-            className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200 bg-white"
+            onChange={(e) => setSeverityFilter(e.target.value as 'all' | 'critical' | 'warning')}
+            className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
           >
             <option value="all">Todos os Alertas</option>
-            <option value="critical">Críticos (Estoque Zero)</option>
-            <option value="warning">Avisos (Estoque Baixo)</option>
+            <option value="critical">Crítico</option>
+            <option value="warning">Atenção</option>
           </select>
 
-          {/* Date Range */}
+          {/* Date Filters */}
           <div className="flex gap-2">
             <input
               type="date"
-              value={queryParams.fromDate || ''}
+              value={queryParams.fromDate}
               onChange={(e) => handleFilterChange('fromDate', e.target.value)}
               className="flex-1 px-3 py-2.5 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
+              placeholder="dd/mm/aaaa"
             />
             <input
               type="date"
-              value={queryParams.toDate || ''}
+              value={queryParams.toDate}
               onChange={(e) => handleFilterChange('toDate', e.target.value)}
               className="flex-1 px-3 py-2.5 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
+              placeholder="dd/mm/aaaa"
             />
           </div>
         </div>
       </FilterSection>
 
-      {/* Info Box */}
-      {filteredComponents.length > 0 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 flex items-start gap-3">
-          <Info className="text-blue-600 flex-shrink-0 mt-0.5" size={20} />
-          <div className="text-sm text-blue-800">
-            <p className="font-medium mb-2">Como funciona a sugestão de compra:</p>
-            <ul className="list-disc list-inside space-y-1">
-              <li>A quantidade sugerida é calculada como o <strong>dobro da quantidade mínima</strong> definida para cada componente</li>
-              <li>Componentes iguais em <strong>ambientes diferentes</strong> são agrupados na exportação</li>
-              <li>Quando há diferença nas quantidades mínimas entre ambientes, prevalece a <strong>maior quantidade</strong></li>
-              <li>A lista exportada mostra em quais ambientes cada componente está presente</li>
-            </ul>
+      {/* Purchase Info */}
+      {selectedComponents.size > 0 && (
+        <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <Info className="text-blue-600 mt-0.5" size={20} />
+            <div className="text-sm text-blue-800">
+              <p className="font-medium mb-2">Como funciona a sugestão de compra:</p>
+              <ul className="list-disc list-inside space-y-1">
+                <li>A quantidade sugerida é calculada como o <strong>dobro da quantidade mínima</strong> definida para cada componente</li>
+                <li>Componentes iguais em <strong>ambientes diferentes</strong> são agrupados na exportação</li>
+                <li>Quando há diferença nas quantidades mínimas entre ambientes, prevalece a <strong>maior quantidade</strong></li>
+                <li>A lista exportada mostra em quais ambientes cada componente está presente</li>
+              </ul>
+            </div>
           </div>
         </div>
       )}
@@ -404,9 +403,6 @@ const AlertsPage: React.FC = () => {
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Componente
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Grupo
@@ -471,21 +467,16 @@ const AlertsPage: React.FC = () => {
                         {severity === 'critical' ? 'Crítico' : 'Atenção'}
                       </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{component.name}</p>
-                        {component.internalCode && (
-                          <p className="text-xs text-gray-500">Cód: {component.internalCode}</p>
-                        )}
-                      </div>
-                    </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="text-sm text-gray-900">{component.group}</span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm">
-                        {component.device && <p className="text-gray-900">{component.device}</p>}
+                        {component.device && <p className="text-gray-900 font-medium">{component.device}</p>}
                         {component.value && <p className="text-gray-600">{component.value}</p>}
+                        {component.internalCode && (
+                          <p className="text-xs text-gray-500">Cód: {component.internalCode}</p>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -554,7 +545,7 @@ const AlertsPage: React.FC = () => {
             {selectedComponents.size > 0 && (
               <tfoot className="bg-gray-50">
                 <tr>
-                  <td colSpan={11} className="px-6 py-3 text-sm font-medium text-right">
+                  <td colSpan={10} className="px-6 py-3 text-sm font-medium text-right">
                     Total da Compra:
                   </td>
                   <td className="px-6 py-3 text-sm font-bold text-right">

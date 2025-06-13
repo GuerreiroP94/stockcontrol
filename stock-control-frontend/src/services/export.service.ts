@@ -1,6 +1,31 @@
 import * as XLSX from 'xlsx';
 import { Component, Product } from '../types';
 
+// Função auxiliar para calcular largura ideal da coluna baseado no conteúdo
+function calculateColumnWidth(data: any[], key: string, minWidth: number = 10): number {
+  const maxLength = Math.max(
+    key.length, // Tamanho do header
+    ...data.map(row => String(row[key] || '').length)
+  );
+  return Math.min(Math.max(maxLength + 2, minWidth), 50); // +2 para padding, máximo 50
+}
+
+// Função auxiliar para aplicar estilo de destaque
+function applyHighlightStyle(ws: XLSX.WorkSheet, colIndex: number, condition: (value: any) => boolean) {
+  const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+  
+  for (let row = 1; row <= range.e.r; row++) { // Começar da linha 1 (pular header)
+    const cellAddress = XLSX.utils.encode_cell({ r: row, c: colIndex });
+    const cell = ws[cellAddress];
+    
+    if (cell && condition(cell.v)) {
+      if (!cell.s) cell.s = {};
+      cell.s.fill = { fgColor: { rgb: "FFE6E6" } };
+      cell.s.font = { color: { rgb: "FF0000" }, bold: true };
+    }
+  }
+}
+
 class ExportService {
   /**
    * Exporta componentes selecionados para Excel
@@ -26,25 +51,11 @@ class ExportService {
 
     const ws = XLSX.utils.json_to_sheet(data);
     
-    // Ajustar largura das colunas
-    const colWidths = [
-      { wch: 8 },   // ID
-      { wch: 30 },  // Nome
-      { wch: 15 },  // Grupo
-      { wch: 20 },  // Device
-      { wch: 10 },  // Value
-      { wch: 12 },  // Package
-      { wch: 25 },  // Características
-      { wch: 12 },  // Qtd. Estoque
-      { wch: 12 },  // Qtd. Mínima
-      { wch: 12 },  // Preço Unit.
-      { wch: 12 },  // Ambiente
-      { wch: 10 },  // Gaveta
-      { wch: 10 },  // Divisão
-      { wch: 15 },  // NCM
-      { wch: 15 }   // NVE
-    ];
-    ws['!cols'] = colWidths;
+    // Ajustar largura das colunas baseado no conteúdo
+    const columns = Object.keys(data[0] || {});
+    ws['!cols'] = columns.map(col => ({
+      wch: calculateColumnWidth(data, col)
+    }));
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Componentes');
@@ -54,7 +65,7 @@ class ExportService {
   }
 
   /**
-   * Exporta produto com ordem customizada
+   * Exporta produto com ordem customizada - CORRIGIDO
    */
   exportProductWithCustomOrder(
     product: Product,
@@ -75,11 +86,11 @@ class ExportService {
       })
       .filter(item => item.productComp && item.component);
 
-    // Preparar dados para exportação
+    // Preparar dados para exportação - REMOVIDAS colunas ORDEM e TOTAL
     const data: any[] = [];
     let totalValue = 0;
 
-    orderedComponents.forEach((item, index) => {
+    orderedComponents.forEach((item) => {
       const { productComp, component } = item;
       const quantity = productComp!.quantity * productionQuantity;
       const unitPrice = component!.price || 0;
@@ -87,9 +98,7 @@ class ExportService {
       totalValue += totalPrice;
 
       const row: any = {
-        'ORDEM': index + 1,
         'QTD': productComp!.quantity,
-        'TOTAL': quantity,
         'DEVICE': component!.device || '',
         'VALUE': component!.value || '',
         'PACKAGE': component!.package || '',
@@ -111,10 +120,8 @@ class ExportService {
     if (includeValues && data.length > 0) {
       data.push({});
       data.push({
-        'ORDEM': '',
         'QTD': '',
-        'TOTAL': 'TOTAL GERAL',
-        'DEVICE': '',
+        'DEVICE': 'TOTAL GERAL',
         'VALUE': '',
         'PACKAGE': '',
         'CÓD.': '',
@@ -129,43 +136,19 @@ class ExportService {
     // Criar planilha
     const ws = XLSX.utils.json_to_sheet(data);
     
-    // Configurar largura das colunas
-    const colWidths = [
-      { wch: 8 },   // ORDEM
-      { wch: 6 },   // QTD
-      { wch: 8 },   // TOTAL
-      { wch: 20 },  // DEVICE
-      { wch: 10 },  // VALUE
-      { wch: 12 },  // PACKAGE
-      { wch: 10 },  // CÓD.
-      { wch: 8 },   // GAVETA
-      { wch: 10 },  // ESTOQUE
-      { wch: 10 }   // COMPRAR
-    ];
-    
-    if (includeValues) {
-      colWidths.push({ wch: 12 }); // VALOR UNIT.
-      colWidths.push({ wch: 12 }); // VALOR TOTAL
-    }
-    
-    ws['!cols'] = colWidths;
+    // Configurar largura das colunas baseado no conteúdo
+    const columns = Object.keys(data[0] || {});
+    ws['!cols'] = columns.map(col => ({
+      wch: calculateColumnWidth(data, col)
+    }));
 
-    // Aplicar estilos (destacar coluna COMPRAR)
-    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
-    const comprarCol = includeValues ? 9 : 9; // Coluna J
-    
-    for (let row = range.s.r + 1; row <= range.e.r; row++) {
-      const cellAddress = XLSX.utils.encode_cell({ r: row, c: comprarCol });
-      if (ws[cellAddress]) {
-        const value = parseInt(ws[cellAddress].v) || 0;
-        if (value > 0) {
-          if (!ws[cellAddress].s) ws[cellAddress].s = {};
-          ws[cellAddress].s = {
-            fill: { fgColor: { rgb: "FFE6E6" } }, // Rosa claro para itens a comprar
-            font: { color: { rgb: "FF0000" }, bold: true } // Texto vermelho
-          };
-        }
-      }
+    // Aplicar estilo de destaque na coluna COMPRAR
+    const comprarColIndex = columns.indexOf('COMPRAR');
+    if (comprarColIndex !== -1) {
+      applyHighlightStyle(ws, comprarColIndex, (value) => {
+        const num = parseInt(value);
+        return !isNaN(num) && num > 0;
+      });
     }
 
     // Criar workbook
@@ -180,12 +163,23 @@ class ExportService {
     
     // Mesclar células do título
     headerWs['!merges'] = [
-      { s: { r: 0, c: 0 }, e: { r: 0, c: includeValues ? 11 : 9 } },
-      { s: { r: 1, c: 0 }, e: { r: 1, c: includeValues ? 11 : 9 } }
+      { s: { r: 0, c: 0 }, e: { r: 0, c: includeValues ? 9 : 7 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: includeValues ? 9 : 7 } }
     ];
 
     // Adicionar dados ao header
     XLSX.utils.sheet_add_json(headerWs, data, { origin: 'A4' });
+    
+    // Copiar larguras de coluna
+    headerWs['!cols'] = ws['!cols'];
+    
+    // Aplicar estilo na coluna COMPRAR no header worksheet também
+    if (comprarColIndex !== -1) {
+      applyHighlightStyle(headerWs, comprarColIndex, (value) => {
+        const num = parseInt(value);
+        return !isNaN(num) && num > 0;
+      });
+    }
     
     XLSX.utils.book_append_sheet(wb, headerWs, 'Produção');
     
@@ -194,7 +188,7 @@ class ExportService {
   }
 
   /**
-   * Exporta múltiplos produtos (exportação cruzada)
+   * Exporta múltiplos produtos (exportação cruzada) - CORRIGIDO
    */
   exportCrossProducts(
     selectedProducts: Product[],
@@ -207,11 +201,11 @@ class ExportService {
     // Criar mapa de componentes
     const componentMap = new Map(components.map(c => [c.id, c]));
     
-    // Preparar dados seguindo a ordem especificada
+    // Preparar dados seguindo a ordem especificada - REMOVIDA coluna Código Interno
     const data: any[] = [];
     let totalValue = 0;
 
-    componentOrder.forEach((componentId, index) => {
+    componentOrder.forEach((componentId) => {
       const merged = mergedComponents.find(m => m.componentId === componentId);
       if (!merged) return;
       
@@ -228,20 +222,20 @@ class ExportService {
         .join(', ');
 
       const row: any = {
-        'Código Interno': `INTC${String(componentId).padStart(4, '0')}`,
-        'Componente': component.name,
+        'Qtd Utilizada': merged.totalUsage || merged.totalQuantity,
+        'Qtd. Total': merged.totalQuantity,
         'Device': component.device || '',
         'Value': component.value || '',
         'Package': component.package || '',
         'Características': component.characteristics || '',
         'Gaveta': component.drawer || '',
         'Divisão': component.division || '',
-        'Qtd Total': merged.totalQuantity,
+        'Qtd. Estoque': component.quantityInStock,
+        'Qtd. Comprar': Math.max(0, merged.totalQuantity - component.quantityInStock),
         'Produtos': productsList
       };
 
       if (includeValues) {
-        row['Preço Unit.'] = `R$ ${unitPrice.toFixed(2)}`;
         row['Preço Total'] = `R$ ${totalPrice.toFixed(2)}`;
       }
 
@@ -249,20 +243,20 @@ class ExportService {
     });
 
     // Adicionar total se incluir valores
-    if (includeValues) {
+    if (includeValues && data.length > 0) {
       data.push({});
       data.push({
-        'Código Interno': 'TOTAL GERAL',
-        'Componente': '',
+        'Qtd Utilizada': '',
+        'Qtd. Total': 'TOTAL GERAL',
         'Device': '',
         'Value': '',
         'Package': '',
         'Características': '',
         'Gaveta': '',
         'Divisão': '',
-        'Qtd Total': '',
+        'Qtd. Estoque': '',
+        'Qtd. Comprar': '',
         'Produtos': '',
-        'Preço Unit.': '',
         'Preço Total': `R$ ${totalValue.toFixed(2)}`
       });
     }
@@ -270,26 +264,20 @@ class ExportService {
     // Criar planilha
     const ws = XLSX.utils.json_to_sheet(data);
     
-    // Configurar larguras
-    const colWidths = [
-      { wch: 15 },  // Código Interno
-      { wch: 30 },  // Componente
-      { wch: 20 },  // Device
-      { wch: 10 },  // Value
-      { wch: 12 },  // Package
-      { wch: 25 },  // Características
-      { wch: 10 },  // Gaveta
-      { wch: 10 },  // Divisão
-      { wch: 10 },  // Qtd Total
-      { wch: 40 },  // Produtos
-    ];
-    
-    if (includeValues) {
-      colWidths.push({ wch: 12 }); // Preço Unit.
-      colWidths.push({ wch: 12 }); // Preço Total
+    // Configurar larguras baseado no conteúdo
+    const columns = Object.keys(data[0] || {});
+    ws['!cols'] = columns.map(col => ({
+      wch: calculateColumnWidth(data, col)
+    }));
+
+    // Aplicar estilo de destaque na coluna Qtd. Comprar
+    const qtdComprarColIndex = columns.indexOf('Qtd. Comprar');
+    if (qtdComprarColIndex !== -1) {
+      applyHighlightStyle(ws, qtdComprarColIndex, (value) => {
+        const num = parseInt(value);
+        return !isNaN(num) && num > 0;
+      });
     }
-    
-    ws['!cols'] = colWidths;
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Exportação Cruzada');
@@ -362,6 +350,13 @@ class ExportService {
     });
 
     const ws = XLSX.utils.json_to_sheet(data);
+    
+    // Ajustar largura das colunas baseado no conteúdo
+    const columns = Object.keys(data[0] || {});
+    ws['!cols'] = columns.map(col => ({
+      wch: calculateColumnWidth(data, col)
+    }));
+    
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Componentes');
     
@@ -370,56 +365,40 @@ class ExportService {
   }
 
   /**
-   * Exporta lista de compras de componentes em alerta
+   * Exporta lista de compras de componentes em alerta - CORRIGIDO
    */
   exportPurchaseList(components: any[], filename?: string) {
     const data = components.map(comp => ({
-      'Qtd Utilizada': comp.totalUsage || 0,
-      'Qtd. Total': comp.totalPurchaseQuantity || 0,
+      'Grupo': comp.group || '',
       'Device': comp.device || '',
       'Value': comp.value || '',
       'Package': comp.package || '',
       'Características': comp.characteristics || '',
-      'Cód. Interno': comp.internalCode || '',
+      'Cód. Interno': comp.internalCode || `INTC${String(comp.id).padStart(4, '0')}`,
       'Gaveta': comp.drawer || '',
       'Divisão': comp.division || '',
       'Qtd. Estoque': comp.quantityInStock || 0,
-      'Qtd. Comprar': comp.quantityToBuy || 0,
-      'Preço Total': `R$ ${(comp.totalPurchasePrice || 0).toFixed(2)}`
+      'Qtd. Comprar': comp.minimumQuantity ? comp.minimumQuantity * 2 : (comp.suggestedPurchase || 0),
+      'Preço Total': `R$ ${((comp.minimumQuantity ? comp.minimumQuantity * 2 : (comp.suggestedPurchase || 0)) * (comp.price || 0)).toFixed(2)}`
     }));
 
     const ws = XLSX.utils.json_to_sheet(data);
     
     // Destacar coluna de quantidade a comprar
-    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
-    const qtdComprarCol = 10; // Coluna K
+    const columns = Object.keys(data[0] || {});
+    const qtdComprarColIndex = columns.indexOf('Qtd. Comprar');
     
-    for (let row = range.s.r + 1; row <= range.e.r; row++) {
-      const cellAddress = XLSX.utils.encode_cell({ r: row, c: qtdComprarCol });
-      if (ws[cellAddress] && parseInt(ws[cellAddress].v) > 0) {
-        if (!ws[cellAddress].s) ws[cellAddress].s = {};
-        ws[cellAddress].s = {
-          fill: { fgColor: { rgb: "FFE6E6" } },
-          font: { color: { rgb: "FF0000" }, bold: true }
-        };
-      }
+    if (qtdComprarColIndex !== -1) {
+      applyHighlightStyle(ws, qtdComprarColIndex, (value) => {
+        const num = parseInt(value);
+        return !isNaN(num) && num > 0;
+      });
     }
 
-    // Configurar larguras
-    ws['!cols'] = [
-      { wch: 12 },  // Qtd Utilizada
-      { wch: 10 },  // Qtd. Total
-      { wch: 20 },  // Device
-      { wch: 10 },  // Value
-      { wch: 12 },  // Package
-      { wch: 25 },  // Características
-      { wch: 12 },  // Cód. Interno
-      { wch: 10 },  // Gaveta
-      { wch: 10 },  // Divisão
-      { wch: 12 },  // Qtd. Estoque
-      { wch: 12 },  // Qtd. Comprar
-      { wch: 12 }   // Preço Total
-    ];
+    // Configurar larguras baseado no conteúdo
+    ws['!cols'] = columns.map(col => ({
+      wch: calculateColumnWidth(data, col)
+    }));
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Lista de Compras');

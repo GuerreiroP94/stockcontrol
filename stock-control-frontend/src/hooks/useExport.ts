@@ -45,12 +45,13 @@ export const useExport = (): UseExportReturn => {
     try {
       setIsExporting(true);
       setExportError(null);
-      // Usar o método correto que existe no exportService
-      await exportService.exportComponentsWithColumnFilter(
-        components, 
-        filters instanceof Set ? filters : new Set(['id', 'name', 'group', 'device', 'value', 'package']), 
-        filename
-      );
+      // Se filters for um Set de colunas selecionadas, usar exportComponentsWithColumnFilter
+      if (filters instanceof Set) {
+        await exportService.exportComponentsWithColumnFilter(components, filters, filename);
+      } else {
+        // Caso contrário, usar exportação padrão
+        await exportService.exportComponentsToExcel(components, filename);
+      }
     } catch (error) {
       setExportError('Erro ao exportar componentes filtrados');
       console.error('Export error:', error);

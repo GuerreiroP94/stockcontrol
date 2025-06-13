@@ -44,7 +44,8 @@ const MovementsListPage: React.FC = () => {
       ]);
       setMovements(movementsData);
       setComponents(componentsData);
-      setTotalItems(movementsData.length === queryParams.pageSize ? queryParams.page * queryParams.pageSize + 1 : (queryParams.page - 1) * queryParams.pageSize + movementsData.length);
+      setTotalItems(movementsData.length === queryParams.pageSize ? 
+        queryParams.page * queryParams.pageSize + 1 : (queryParams.page - 1) * queryParams.pageSize + movementsData.length);
     } catch (error) {
       setError('Erro ao carregar movimentações');
       console.error(error);
@@ -65,9 +66,8 @@ const MovementsListPage: React.FC = () => {
     setQueryParams(prev => ({ ...prev, [field]: value, page: 1 }));
   };
 
-  const getComponentName = (componentId: number) => {
-    const component = components.find(c => c.id === componentId);
-    return component?.name || `Componente #${componentId}`;
+  const getComponent = (componentId: number): Component | undefined => {
+    return components.find(c => c.id === componentId);
   };
 
   const getTotalQuantity = (type: 'Entrada' | 'Saida') => {
@@ -134,7 +134,9 @@ const MovementsListPage: React.FC = () => {
           >
             <option value="">Todos os Componentes</option>
             {components.map(comp => (
-              <option key={comp.id} value={comp.id}>{comp.name}</option>
+              <option key={comp.id} value={comp.id}>
+                {comp.device || comp.name} {comp.value ? `- ${comp.value}` : ''}
+              </option>
             ))}
           </select>
 
@@ -201,7 +203,16 @@ const MovementsListPage: React.FC = () => {
                 Tipo
               </th>
               <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Componente
+                Grupo
+              </th>
+              <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Device
+              </th>
+              <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Value
+              </th>
+              <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Package
               </th>
               <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Quantidade
@@ -215,52 +226,71 @@ const MovementsListPage: React.FC = () => {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {movements.map((movement) => (
-              <tr key={movement.id} className="hover:bg-gray-50 transition-colors duration-150">
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${
-                    getMovementTypeClasses(movement.movementType)
-                  }`}>
-                    {movement.movementType === 'Entrada' ? (
-                      <TrendingUp size={14} />
-                    ) : (
-                      <TrendingDown size={14} />
-                    )}
-                    {movement.movementType}
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <p className="text-sm font-medium text-gray-900">
-                    {getComponentName(movement.componentId)}
-                  </p>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <p className={`text-sm font-bold ${
-                    movement.movementType === 'Entrada' 
-                      ? 'text-green-600' 
-                      : 'text-red-600'
-                  }`}>
-                    {movement.movementType === 'Entrada' ? '+' : '-'}{Math.abs(movement.quantity)}
-                  </p>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <Calendar size={14} />
-                    {formatDateTime(movement.movementDate)}
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center">
-                      <User size={12} className="text-gray-600" />
+            {movements.map((movement) => {
+              const component = getComponent(movement.componentId);
+              
+              return (
+                <tr key={movement.id} className="hover:bg-gray-50 transition-colors duration-150">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${
+                      getMovementTypeClasses(movement.movementType)
+                    }`}>
+                      {movement.movementType === 'Entrada' ? (
+                        <TrendingUp size={14} />
+                      ) : (
+                        <TrendingDown size={14} />
+                      )}
+                      {movement.movementType}
                     </div>
-                    <span className="text-sm text-gray-600">
-                      {movement.userName || movement.performedBy}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="text-sm text-gray-900">
+                      {component?.group || '-'}
                     </span>
-                  </div>
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="text-sm font-medium text-gray-900">
+                      {component?.device || '-'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="text-sm text-gray-600">
+                      {component?.value || '-'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="text-sm text-gray-600">
+                      {component?.package || '-'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <p className={`text-sm font-bold ${
+                      movement.movementType === 'Entrada' 
+                        ? 'text-green-600' 
+                        : 'text-red-600'
+                    }`}>
+                      {movement.movementType === 'Entrada' ? '+' : '-'}{Math.abs(movement.quantity)}
+                    </p>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <Calendar size={14} />
+                      {formatDateTime(movement.movementDate)}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center">
+                        <User size={12} className="text-gray-600" />
+                      </div>
+                      <span className="text-sm text-gray-600">
+                        {movement.userName || movement.performedBy}
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
 
