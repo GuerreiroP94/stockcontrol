@@ -7,89 +7,68 @@ interface SummaryData {
 }
 
 class ExportService {
-  // Exportar lista de componentes - método padrão renomeado para compatibilidade
+  // Método principal para exportar componentes (esperado por useExport.ts)
   exportComponentsToExcel(components: Component[], filename: string = 'componentes.xlsx') {
     this.exportComponents(components, filename);
   }
 
-  // Exportar componentes com filtro de colunas
+  // Exportar componentes com filtro de colunas (esperado por useExport.ts)
   exportComponentsWithColumnFilter(
     components: Component[], 
-    selectedColumns: Set<string>, 
-    filename: string = 'componentes_filtrados.xlsx'
+    visibleColumns: Set<string> | { [key: string]: boolean },
+    filename: string = 'componentes.xlsx'
   ) {
     const wb = XLSX.utils.book_new();
     
-    // Mapeamento de colunas disponíveis
-    const columnMapping: { [key: string]: (comp: Component) => any } = {
-      'id': (comp) => comp.id,
-      'group': (comp) => comp.group,
-      'device': (comp) => comp.device || '',
-      'value': (comp) => comp.value || '',
-      'package': (comp) => comp.package || '',
-      'internalCode': (comp) => comp.internalCode || '',
-      'description': (comp) => comp.description || '',
-      'quantityInStock': (comp) => comp.quantityInStock,
-      'minimumQuantity': (comp) => comp.minimumQuantity,
-      'price': (comp) => formatCurrency(comp.price || 0),
-      'environment': (comp) => comp.environment === 'laboratorio' ? 'Laboratório' : 'Estoque',
-      'drawer': (comp) => comp.drawer || '',
-      'division': (comp) => comp.division || '',
-      'ncm': (comp) => comp.ncm || '',
-      'nve': (comp) => comp.nve || '',
-      'characteristics': (comp) => comp.characteristics || ''
-    };
-
-    // Nomes amigáveis das colunas
-    const columnNames: { [key: string]: string } = {
-      'id': 'ID',
-      'group': 'Grupo',
-      'device': 'Device',
-      'value': 'Value',
-      'package': 'Package',
-      'internalCode': 'Cód. Interno',
-      'description': 'Descrição',
-      'quantityInStock': 'Qtd. Estoque',
-      'minimumQuantity': 'Qtd. Mínima',
-      'price': 'Preço Unit.',
-      'environment': 'Ambiente',
-      'drawer': 'Gaveta',
-      'division': 'Divisão',
-      'ncm': 'NCM',
-      'nve': 'NVE',
-      'characteristics': 'Características'
-    };
-
-    // Criar dados apenas com colunas selecionadas
+    // Converter Set para objeto se necessário
+    const columns = visibleColumns instanceof Set 
+      ? Object.fromEntries(Array.from(visibleColumns).map(col => [col, true]))
+      : visibleColumns;
+    
     const data = components.map(comp => {
       const row: any = {};
-      selectedColumns.forEach(col => {
-        if (columnMapping[col]) {
-          row[columnNames[col] || col] = columnMapping[col](comp);
-        }
-      });
+      
+      if (columns.id !== false) row['ID'] = comp.id;
+      if (columns.group !== false) row['Grupo'] = comp.group;
+      if (columns.device !== false) row['Device'] = comp.device || '';
+      if (columns.value !== false) row['Value'] = comp.value || '';
+      if (columns.package !== false) row['Package'] = comp.package || '';
+      if (columns.internalCode !== false) row['Cód. Interno'] = comp.internalCode || '';
+      if (columns.description !== false) row['Descrição'] = comp.description || '';
+      if (columns.quantityInStock !== false) row['Qtd. Estoque'] = comp.quantityInStock;
+      if (columns.minimumQuantity !== false) row['Qtd. Mínima'] = comp.minimumQuantity;
+      if (columns.price !== false) row['Preço Unit.'] = formatCurrency(comp.price || 0);
+      if (columns.environment !== false) row['Ambiente'] = comp.environment === 'laboratorio' ? 'Laboratório' : 'Estoque';
+      if (columns.drawer !== false) row['Gaveta'] = comp.drawer || '';
+      if (columns.division !== false) row['Divisão'] = comp.division || '';
+      if (columns.ncm !== false) row['NCM'] = comp.ncm || '';
+      if (columns.nve !== false) row['NVE'] = comp.nve || '';
+      if (columns.characteristics !== false) row['Características'] = comp.characteristics || '';
+      
       return row;
     });
     
     const ws = XLSX.utils.json_to_sheet(data);
     
-    // Configurar larguras automáticas
-    const colWidths = Array.from(selectedColumns).map(col => {
-      switch(col) {
-        case 'id': return { wch: 8 };
-        case 'description': return { wch: 30 };
-        case 'characteristics': return { wch: 30 };
-        case 'device': return { wch: 20 };
-        default: return { wch: 15 };
+    // Configurar larguras das colunas dinamicamente
+    const columnWidths = Object.keys(data[0] || {}).map(key => {
+      switch(key) {
+        case 'ID': return { wch: 8 };
+        case 'Grupo': return { wch: 15 };
+        case 'Device': return { wch: 20 };
+        case 'Descrição': return { wch: 30 };
+        case 'Características': return { wch: 30 };
+        default: return { wch: 12 };
       }
     });
-    ws['!cols'] = colWidths;
     
-    XLSX.utils.book_append_sheet(wb, ws, 'Componentes Filtrados');
+    ws['!cols'] = columnWidths;
+    
+    XLSX.utils.book_append_sheet(wb, ws, 'Componentes');
     XLSX.writeFile(wb, filename);
   }
 
-  // Exportar lista de componentes - método original
+  // Exportar lista de componentes
   exportComponents(components: Component[], filename: string = 'componentes.xlsx') {
     const wb = XLSX.utils.book_new();
     
@@ -198,13 +177,13 @@ class ExportService {
     XLSX.utils.book_append_sheet(wb, ws, 'Componentes');
     
     // Adicionar aba de resumo
-    const summaryData: SummaryData[] = [{
+    const summaryData: SummaryData = {
       'Produto': product.name,
       'Quantidade a Produzir': productionQuantity,
       'Total de Componentes': customOrder.length,
       'Data': new Date().toLocaleDateString('pt-BR'),
       'Hora': new Date().toLocaleTimeString('pt-BR')
-    }];
+    };
     
     if (includeValues) {
       const totalValue = orderedData.reduce((sum, row) => {
@@ -214,10 +193,10 @@ class ExportService {
         }
         return sum;
       }, 0);
-      summaryData[0]['Valor Total'] = `R$ ${totalValue.toFixed(2).replace('.', ',')}`;
+      summaryData['Valor Total'] = `R$ ${totalValue.toFixed(2).replace('.', ',')}`;
     }
     
-    const wsSummary = XLSX.utils.json_to_sheet(summaryData);
+    const wsSummary = XLSX.utils.json_to_sheet([summaryData]);
     XLSX.utils.book_append_sheet(wb, wsSummary, 'Resumo');
     
     // Gerar arquivo
@@ -229,19 +208,17 @@ class ExportService {
   exportCrossProducts(
     selectedProducts: Product[], 
     components: Component[],
-    productQuantities: { [productId: number]: number },
-    mergedComponents: MergedComponent[],
-    componentOrder: number[],
     includeValues: boolean = true
   ) {
     const wb = XLSX.utils.book_new();
     
-    // Dados para planilha principal ordenados
-    const mainData = componentOrder.map((componentId, index) => {
-      const mergedComp = mergedComponents.find(mc => mc.componentId === componentId);
-      const component = components.find(c => c.id === componentId);
-      
-      if (!mergedComp || !component) return null;
+    // Mesclar componentes de todos os produtos
+    const mergedComponents = this.mergeProductComponents(selectedProducts, components);
+    
+    // Dados para planilha principal
+    const mainData = mergedComponents.map((mergedComp, index) => {
+      const component = components.find(c => c.id === mergedComp.componentId);
+      if (!component) return null;
       
       const row: any = {
         'ORDEM': index + 1,
@@ -282,7 +259,6 @@ class ExportService {
     
     // Adicionar aba por produto
     selectedProducts.forEach(product => {
-      const quantity = productQuantities[product.id] || 1;
       const productData = product.components.map((pc, index) => {
         const component = components.find(c => c.id === pc.componentId);
         if (!component) return null;
@@ -293,12 +269,12 @@ class ExportService {
           'DEVICE': component.device || '',
           'VALUE': component.value || '',
           'PACKAGE': component.package || '',
-          'QUANTIDADE': pc.quantity * quantity
+          'QUANTIDADE': pc.quantity
         };
         
         if (includeValues && component.price) {
           row['VALOR UNIT.'] = formatCurrency(component.price);
-          row['VALOR TOTAL'] = formatCurrency(component.price * pc.quantity * quantity);
+          row['VALOR TOTAL'] = formatCurrency(component.price * pc.quantity);
         }
         
         return row;
@@ -372,19 +348,17 @@ class ExportService {
     XLSX.utils.book_append_sheet(wb, ws, 'Lista de Compras');
     
     // Adicionar resumo
-    const totalValue = purchaseData.reduce((sum, item) => {
-      const value = parseFloat(item.TOTAL.replace('R$', '').replace('.', '').replace(',', '.'));
-      return sum + value;
-    }, 0);
-
-    const summaryData: SummaryData[] = [{
+    const summaryData: SummaryData = {
       'Total de Itens': purchaseData.length,
-      'Valor Total': formatCurrency(totalValue),
+      'Valor Total': formatCurrency(purchaseData.reduce((sum, item) => {
+        const value = parseFloat(item.TOTAL.replace('R$', '').replace('.', '').replace(',', '.'));
+        return sum + value;
+      }, 0)),
       'Data': new Date().toLocaleDateString('pt-BR'),
       'Hora': new Date().toLocaleTimeString('pt-BR')
-    }];
+    };
     
-    const wsSummary = XLSX.utils.json_to_sheet(summaryData);
+    const wsSummary = XLSX.utils.json_to_sheet([summaryData]);
     XLSX.utils.book_append_sheet(wb, wsSummary, 'Resumo');
     
     // Gerar arquivo
@@ -427,4 +401,5 @@ class ExportService {
   }
 }
 
-export default new ExportService();
+const exportService = new ExportService();
+export default exportService;

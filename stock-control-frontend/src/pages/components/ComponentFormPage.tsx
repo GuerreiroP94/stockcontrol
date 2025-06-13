@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Save, Cpu } from 'lucide-react';
 import componentsService from '../../services/components.service';
@@ -54,9 +54,9 @@ const ComponentFormPage: React.FC = () => {
     if (isEditing && id) {
       fetchComponent(Number(id));
     }
-  }, [id, isEditing]);
+  }, [id, isEditing, fetchComponent]);
 
-  const fetchComponent = async (componentId: number) => {
+  const fetchComponent = useCallback(async (componentId: number) => {
     try {
       setLoading(true);
       const component = await componentsService.getById(componentId);
@@ -98,7 +98,7 @@ const ComponentFormPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [groups, devices, values]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
