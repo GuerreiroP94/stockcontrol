@@ -248,6 +248,171 @@ namespace PreSystem.StockControl.Application.Services
                 return result;
             }
         }
+        // Registra movimentações em massa com suporte a baixa parcial
+        public async Task<PartialStockResultDto> RegisterBulkMovementsPartialAsync(BulkStockMovementWithPartialDto dto)
+        {
+            var result = new PartialStockResultDto
+            {
+                Success = true,
+                TotalRequested = 0,
+                TotalProcessed = 0
+            };
+
+            // Coletar IDs únicos dos componentes afetados
+            var affectedComponentIds = new HashSet<int>();
+            var adjustedMovements = new List<StockMovementCreateDto>();
+
+            try
+            {
+                foreach (var movement in dto.Movements)
+                {
+                    var component = await _componentRepository.GetByIdAsync(movement.ComponentId);
+                    if (component == null)
+                    {
+                        result.Warnings.Add($"Componente ID {movement.ComponentId} não encontrado");
+                        continue;
+                    }
+
+                    result.TotalRequested += movement.Quantity;
+
+                    if (movement.MovementType == "Saida")
+                    {
+                        var available = component.QuantityInStock;
+                        var toProcess = dto.AllowPartial
+                            ? Math.Min(movement.Quantity, available)
+                            : movement.Quantity;
+
+                        if (available == 0 && movement.Quantity > 0)
+                        {
+                            result.PartialMovements.Add(new PartialMovementDto
+                            {
+                                ComponentId = movement.ComponentId,
+                                ComponentName = component.Name,
+                                Requested = movement.Quantity,
+                                Processed = 0,
+                                Available = 0,
+                                Status = "unavailable"
+                            });
+                            result.Warnings.Add($"{component.Name}: Estoque zerado. Necessário comprar {movement.Quantity} unidades.");
+
+                            if (!dto.AllowPartial)
+                            {
+                                result.Success = false;
+                                result.Warnings.Add($"Operação cancelada: {component.Name} não tem estoque disponível.");
+                                return result;
+                            }
+                        }
+                        else if (available < movement.Quantity)
+                        {
+                            if (dto.AllowPartial)
+                            {
+                                adjustedMovements.Add(new StockMovementCreateDto
+                                {
+                                    ComponentId = movement.ComponentId,
+                                    MovementType = movement.MovementType,
+                                    Quantity = available
+                                });
+                                result.TotalProcessed += available;
+                                result.PartialMovements.Add(new PartialMovementDto
+                                {
+                                    ComponentId = movement.ComponentId,
+                                    ComponentName = component.Name,
+                                    Requested = movement.Quantity,
+                                    Processed = available,
+                                    Available = available,
+                                    Status = "partial"
+                                });
+                                result.Warnings.Add(
+                                    $"{component.Name}: Estoque parcial. Baixa de {available} de {movement.Quantity} solicitadas. " +
+                                    $"Estoque zerado! Necessário comprar {movement.Quantity - available} unidades."
+                                );
+                                affectedComponentIds.Add(movement.ComponentId);
+                            }
+                            else
+                            {
+                                result.Success = false;
+                                result.Warnings.Add($"Estoque insuficiente para {component.Name}. Disponível: {available}, Solicitado: {movement.Quantity}");
+                                return result;
+                            }
+                        }
+                        else
+                        {
+                            adjustedMovements.Add(new StockMovementCreateDto
+                            {
+                                ComponentId = movement.ComponentId,
+                                MovementType = movement.MovementType,
+                                Quantity = movement.Quantity
+                            });
+                            result.TotalProcessed += movement.Quantity;
+                            result.PartialMovements.Add(new PartialMovementDto
+                            {
+                                ComponentId = movement.ComponentId,
+                                ComponentName = component.Name,
+                                Requested = movement.Quantity,
+                                Processed = movement.Quantity,
+                                Available = available,
+                                Status = "full"
+                            });
+                            affectedComponentIds.Add(movement.ComponentId);
+                        }
+                    }
+                    else
+                    {
+                        // Entrada sempre processa total
+                        adjustedMovements.Add(new StockMovementCreateDto
+                        {
+                            ComponentId = movement.ComponentId,
+                            MovementType = movement.MovementType,
+                            Quantity = movement.Quantity
+                        });
+                        result.TotalProcessed += movement.Quantity;
+                        affectedComponentIds.Add(movement.ComponentId);
+                    }
+                }
+
+                // Processar apenas movimentações válidas
+                if (adjustedMovements.Any())
+                {
+                    foreach (var movement in adjustedMovements)
+                    {
+                        try
+                        {
+                            await RegisterMovementAsync(movement);
+                        }
+                        catch (Exception ex)
+                        {
+                            result.Success = false;
+                            result.Warnings.Add($"Erro ao processar componente {movement.ComponentId}: {ex.Message}");
+                        }
+                    }
+                }
+
+                // Verificar e gerar alertas para componentes afetados
+                foreach (var componentId in affectedComponentIds)
+                {
+                    var component = await _componentRepository.GetByIdAsync(componentId);
+                    if (component != null && component.QuantityInStock <= component.MinimumQuantity)
+                    {
+                        await _alertManager.CheckAndCreateAlertAsync(componentId);
+                    }
+                }
+
+                // Adicionar mensagem final se houver componentes sem estoque
+                if (result.Warnings.Any())
+                {
+                    result.Warnings.Add("\n⚠️ Para verificar componentes sem estoque e gerar relatório de compra, acesse a página de Alertas.");
+                }
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erro ao processar movimentações em massa com suporte parcial");
+                result.Success = false;
+                result.Warnings.Add($"Erro geral: {ex.Message}");
+                return result;
+            }
+        }
 
         // Método privado para mapear Entity para DTO
         private StockMovementDto MapToDto(StockMovement movement)

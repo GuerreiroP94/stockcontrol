@@ -291,62 +291,27 @@ const ProductsListPage: React.FC = () => {
     setShowCrossExportModal(true);
   };
 
-  const handleConfirmCrossExport = (mergedComponents: MergedComponent[], includeValues: boolean) => {
-    // Criar dados para exportação
-    const exportData = mergedComponents.map(comp => {
-      const baseData: any = {
-        'Código Interno': comp.internalCode || '',
-        'Componente': comp.componentName,
-        'Device': comp.device || '',
-        'Value': comp.value || '',
-        'Package': comp.package || '',
-        'Características': comp.characteristics || '',
-        'Gaveta': comp.drawer || '',
-        'Divisão': comp.division || '',
-        'Qtd Total': comp.totalQuantity,
-        'Produtos': comp.products.join(', ')
-      };
-
-      if (includeValues && comp.unitPrice !== undefined) {
-        baseData['Preço Unit.'] = comp.unitPrice || 0;
-        baseData['Preço Total'] = (comp.unitPrice || 0) * comp.totalQuantity;
-      }
-
-      return baseData;
-    });
-
-    // Calcular total se incluir valores
-    if (includeValues) {
-      const totalGeral = mergedComponents.reduce((sum, comp) => 
-        sum + ((comp.unitPrice || 0) * comp.totalQuantity), 0
-      );
-
-      const totalRow: any = {};
-      Object.keys(exportData[0] || {}).forEach(key => {
-        if (key === 'Preço Total') {
-          totalRow[key] = totalGeral;
-        } else if (key === 'Componente') {
-          totalRow[key] = 'TOTAL GERAL';
-        } else {
-          totalRow[key] = '';
-        }
-      });
-
-      exportData.push(totalRow);
-    }
-
-    // Exportar usando XLSX
-    const ws = XLSX.utils.json_to_sheet(exportData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Exportação Cruzada');
-    
-    const filename = `exportacao_cruzada_${new Date().toISOString().split('T')[0]}.xlsx`;
-    XLSX.writeFile(wb, filename);
-    
-    setSuccess('Exportação cruzada realizada com sucesso!');
-    setShowCrossExportModal(false);
-    setSelectedProducts(new Set());
-  };
+  const handleConfirmCrossExport = (
+  productQuantities: { [productId: number]: number },
+  mergedComponents: any[],
+  componentOrder: number[],
+  includeValues: boolean
+) => {
+  const selectedProds = products.filter(p => selectedProducts.has(p.id));
+  
+  exportService.exportCrossProducts(
+    selectedProds,
+    components,
+    productQuantities,
+    mergedComponents,
+    componentOrder,
+    includeValues
+  );
+  
+  setSuccess('Exportação cruzada realizada com sucesso!');
+  setShowCrossExportModal(false);
+  setSelectedProducts(new Set());
+};
 
   const pageActions = (
     <div className="flex items-center gap-2">

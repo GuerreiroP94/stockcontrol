@@ -28,7 +28,7 @@ namespace PreSystem.StockControl.WebApi.Controllers
             return Ok(movements);
         }
 
-        // GET: api/StockMovement/component/
+        // GET: api/StockMovement/component/{componentId}
         [HttpGet("component/{componentId}")]
         public async Task<ActionResult<IEnumerable<StockMovementDto>>> GetByComponentId(int componentId)
         {
@@ -47,7 +47,7 @@ namespace PreSystem.StockControl.WebApi.Controllers
 
         // POST: api/StockMovement/bulk (Movimentações em massa)
         [HttpPost("bulk")]
-        [Authorize]
+        [Authorize] // Removido (Roles = "admin") para permitir operators
         public async Task<ActionResult<BulkMovementResultDto>> CreateBulkMovements([FromBody] BulkStockMovementDto dto)
         {
             if (dto.Movements == null || !dto.Movements.Any())
@@ -71,6 +71,36 @@ namespace PreSystem.StockControl.WebApi.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Erro ao processar movimentações em massa");
+                return StatusCode(500, new { message = "Erro ao processar movimentações", error = ex.Message });
+            }
+        }
+
+        // POST: api/StockMovement/bulk-partial (Movimentações em massa com suporte a baixa parcial)
+        [HttpPost("bulk-partial")]
+        [Authorize] // Permite operators também
+        public async Task<ActionResult<PartialStockResultDto>> CreateBulkMovementsPartial([FromBody] BulkStockMovementWithPartialDto dto)
+        {
+            if (dto.Movements == null || !dto.Movements.Any())
+            {
+                return BadRequest("Nenhuma movimentação fornecida");
+            }
+
+            try
+            {
+                var result = await _stockMovementService.RegisterBulkMovementsPartialAsync(dto);
+
+                if (result.Success || dto.AllowPartial)
+                {
+                    return Ok(result);
+                }
+                else
+                {
+                    return BadRequest(result);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erro ao processar movimentações em massa com suporte parcial");
                 return StatusCode(500, new { message = "Erro ao processar movimentações", error = ex.Message });
             }
         }
