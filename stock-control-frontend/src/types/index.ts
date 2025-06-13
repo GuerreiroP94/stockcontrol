@@ -255,7 +255,7 @@ export interface CrossExportData {
 export interface MergedComponent {
   componentId: number;
   componentName: string;
-  group: string; // Adicione esta linha
+  group: string; 
   device?: string;
   value?: string;
   package?: string;
@@ -264,7 +264,7 @@ export interface MergedComponent {
   drawer?: string;
   division?: string;
   totalQuantity: number;
-  products: string[]; // nomes dos produtos que contêm este componente
+  products: string[]; 
   unitPrice?: number;
 }
 
