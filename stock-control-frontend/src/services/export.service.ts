@@ -265,7 +265,7 @@ class ExportService {
     const wsMain = XLSX.utils.json_to_sheet(mainData);
     
     // Configurar larguras
-    ws['!cols'] = [
+    wsMain['!cols'] = [
       { wch: 8 },   // ORDEM
       { wch: 15 },  // GRUPO
       { wch: 20 },  // DEVICE
