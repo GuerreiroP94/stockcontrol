@@ -21,7 +21,9 @@ builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
 {
     ["EmailSettings:SmtpUser"] = Environment.GetEnvironmentVariable("EMAIL_SMTP_USER"),
     ["EmailSettings:SmtpPassword"] = Environment.GetEnvironmentVariable("EMAIL_SMTP_PASSWORD"),
-    ["EmailSettings:FromEmail"] = Environment.GetEnvironmentVariable("EMAIL_FROM")
+    ["EmailSettings:FromEmail"] = Environment.GetEnvironmentVariable("EMAIL_FROM"),
+    ["FrontendUrl"] = Environment.GetEnvironmentVariable("FRONTEND_URL") ?? "http://localhost:5173"
+
 });
 
 // Registro de dependências da aplicação

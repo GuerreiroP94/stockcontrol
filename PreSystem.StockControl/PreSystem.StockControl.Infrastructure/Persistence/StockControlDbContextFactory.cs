@@ -3,12 +3,8 @@ using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
 using PreSystem.StockControl.Infrastructure.Persistence;
 
-
-
-
 namespace PreSystem.StockControl.Infrastructure
 {
-    // Essa fábrica permite que o EF Core crie instâncias do contexto no momento de design (ex: migration)
     public class StockControlDbContextFactory : IDesignTimeDbContextFactory<StockControlDbContext>
     {
         public StockControlDbContext CreateDbContext(string[] args)
@@ -23,7 +19,7 @@ namespace PreSystem.StockControl.Infrastructure
             var connectionString = configuration.GetConnectionString("DefaultConnection");
 
             var optionsBuilder = new DbContextOptionsBuilder<StockControlDbContext>();
-            optionsBuilder.UseSqlServer(connectionString);
+            optionsBuilder.UseNpgsql(connectionString); // Mudou de UseSqlServer para UseNpgsql
 
             return new StockControlDbContext(optionsBuilder.Options);
         }
