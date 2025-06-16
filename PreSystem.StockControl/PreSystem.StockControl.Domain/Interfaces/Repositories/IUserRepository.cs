@@ -18,5 +18,8 @@ namespace PreSystem.StockControl.Domain.Interfaces.Repositories
 
         // Atualiza um usuário (ex: papel, nome etc.)
         Task UpdateAsync(User user);
+
+        // Deleta usuário
+        Task DeleteAsync(User user);
     }
 }

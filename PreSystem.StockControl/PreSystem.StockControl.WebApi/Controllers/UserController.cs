@@ -137,5 +137,22 @@ namespace PreSystem.StockControl.WebApi.Controllers
                 return StatusCode(500, new { error = "Erro ao processar solicitação" });
             }
         }
+        // DELETE: api/user/{id} - Deletar usuário (apenas admin)
+        [HttpDelete("{id:int}")]
+        [Authorize(Roles = "admin")]
+        public async Task<IActionResult> DeleteUser(int id)
+        {
+            try
+            {
+                var deleted = await _userService.DeleteUserAsync(id);
+                if (!deleted) return NotFound();
+
+                return NoContent();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
     }
 }

@@ -13,6 +13,8 @@ namespace PreSystem.StockControl.Application.Services
         private readonly ILogger<EmailService> _logger;
 
         public EmailService(IConfiguration configuration, ILogger<EmailService> logger)
+
+
         {
             _configuration = configuration;
             _logger = logger;

@@ -473,10 +473,7 @@ const AlertsPage: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm">
                         {component.device && <p className="text-gray-900 font-medium">{component.device}</p>}
-                        {component.value && <p className="text-gray-600">{component.value}</p>}
-                        {component.internalCode && (
-                          <p className="text-xs text-gray-500">Cód: {component.internalCode}</p>
-                        )}
+                        {component.value && <p className="text-gray-600">{component.value}</p>}                      
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">

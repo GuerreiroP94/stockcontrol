@@ -21,6 +21,9 @@ namespace PreSystem.StockControl.Application.Interfaces.Services
         // Atualização de usuário por admin
         Task<bool> UpdateUserByAdminAsync(int id, UserUpdateDto dto);
 
+        // Deletar usuário
+        Task<bool> DeleteUserAsync(int id);
+
         /// <summary>
         /// Valida se a senha fornecida corresponde à senha atual do usuário
         /// </summary>

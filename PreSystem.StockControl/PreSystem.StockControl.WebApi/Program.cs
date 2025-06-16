@@ -11,9 +11,18 @@ using PreSystem.StockControl.Application.Validators;
 using FluentValidation;
 using FluentValidation.AspNetCore;
 
-
-
 var builder = WebApplication.CreateBuilder(args);
+
+// IMPORTANTE: Carregar variáveis de ambiente do arquivo .env
+DotNetEnv.Env.Load();
+
+// Adicionar as variáveis de ambiente à configuração
+builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+{
+    ["EmailSettings:SmtpUser"] = Environment.GetEnvironmentVariable("EMAIL_SMTP_USER"),
+    ["EmailSettings:SmtpPassword"] = Environment.GetEnvironmentVariable("EMAIL_SMTP_PASSWORD"),
+    ["EmailSettings:FromEmail"] = Environment.GetEnvironmentVariable("EMAIL_FROM")
+});
 
 // Registro de dependências da aplicação
 //Aqui informamos ao ASP.NET Core como criar instâncias dos nossos serviços e repositórios
@@ -25,8 +34,6 @@ builder.Services.AddScoped<IUserRepository, UserRepository>(); // Injeta o repos
 builder.Services.AddScoped<IUserService, UserService>(); // Injeta o serviço de usuários
 builder.Services.AddScoped<IPasswordResetTokenRepository, PasswordResetTokenRepository>(); // Repositório de tokens de reset
 builder.Services.AddScoped<IEmailService, EmailService>(); // Serviço de email
-
-
 
 // Configuração do CORS para permitir requisições do frontend
 builder.Services.AddCors(options =>
@@ -59,8 +66,8 @@ builder.Services.AddSwaggerGen(c =>
     //Adiciona suporte a JWT no Swagger
     c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
     {
-        Description = @"JWT Authorization header usando o esquema Bearer.  
-          Digite assim: 'Bearer {seu token}' (sem aspas)",
+        Description = @"JWT Authorization header usando o esquema Bearer.
+                        Digite assim: 'Bearer {seu token}' (sem aspas)",
         Name = "Authorization",
         In = Microsoft.OpenApi.Models.ParameterLocation.Header,
         Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
@@ -131,7 +138,6 @@ app.UseCors("AllowFrontend"); // Permite requisições do frontend React (Vite)
 app.UseHttpsRedirection();  // Redirecionamento para HTTPS
 app.UseAuthentication();     // Habilita o middleware de autenticação para validar o token JWT enviado nas requisições
 app.UseAuthorization();     // Middleware de autorização (JWT, policies, etc.)
-
 app.MapControllers();       // Mapeia automaticamente todos os controllers da aplicação
 
 app.Run();                  // Inicia a aplicação

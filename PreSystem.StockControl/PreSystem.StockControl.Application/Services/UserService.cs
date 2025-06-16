@@ -139,5 +139,20 @@ namespace PreSystem.StockControl.Application.Services
 
             return isPasswordValid;
         }
+
+        // Adicione este método na implementação
+        public async Task<bool> DeleteUserAsync(int id)
+        {
+            var user = await _userRepository.GetByIdAsync(id);
+            if (user == null) return false;
+
+            // Impede que o usuário delete a si mesmo
+            var currentUserId = _userContextService.GetCurrentUserId();
+            if (currentUserId == user.Id)
+                throw new InvalidOperationException("Você não pode deletar seu próprio usuário.");
+
+            await _userRepository.DeleteAsync(user);
+            return true;
+        }
     }
 }
