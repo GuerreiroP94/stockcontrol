@@ -13,7 +13,7 @@ namespace PreSystem.StockControl.WebApi.Configurations
         {
             // 🔌 Configuração do DbContext com o SQL Server
             services.AddDbContext<StockControlDbContext>(options =>
-            options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
+            options.UseNpgsql(configuration.GetConnectionString("DefaultConnection")));
 
             // Repositórios
             services.AddScoped<IComponentRepository, ComponentRepository>();
