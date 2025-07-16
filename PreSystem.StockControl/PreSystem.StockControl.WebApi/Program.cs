@@ -37,6 +37,16 @@ builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
     ["FrontendUrl"] = Environment.GetEnvironmentVariable("FRONTEND_URL") ?? "http://localhost:5173"
 });
 
+// Log da connection string (sem senha)
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (!string.IsNullOrEmpty(connectionString))
+{
+    var safeCString = connectionString.Contains("Password") ?
+        connectionString.Substring(0, connectionString.IndexOf("Password")) + "Password=***" :
+        connectionString;
+    Console.WriteLine($"Connection String: {safeCString}");
+}
+
 // Registro de dependências da aplicação
 //Aqui informamos ao ASP.NET Core como criar instâncias dos nossos serviços e repositórios
 builder.Services.AddScoped<IComponentRepository, ComponentRepository>(); // Injeta o repositório de componentes
@@ -141,7 +151,7 @@ builder.Services.AddAuthentication(options =>
 var app = builder.Build();
 
 // ==========================================
-// 🚀 AUTO-MIGRAÇÃO PARA RAILWAY/PRODUÇÃO
+// 🚀 DEBUG E CONFIGURAÇÃO DO BANCO
 // ==========================================
 if (app.Environment.IsProduction())
 {
@@ -151,25 +161,51 @@ if (app.Environment.IsProduction())
         {
             var context = scope.ServiceProvider.GetRequiredService<StockControlDbContext>();
 
-            Console.WriteLine("Verificando se o banco precisa de migração...");
+            Console.WriteLine("=== INÍCIO DEBUG BANCO ===");
 
-            // Aplica migrações automaticamente
-            if (context.Database.GetPendingMigrations().Any())
+            // Testar conexão
+            Console.WriteLine("Testando conexão com banco...");
+            var canConnect = await context.Database.CanConnectAsync();
+            Console.WriteLine($"Conectado ao banco: {canConnect}");
+
+            if (!canConnect)
             {
-                Console.WriteLine("Executando migrações do banco de dados...");
-                context.Database.Migrate();
+                Console.WriteLine("ERRO: Não foi possível conectar ao banco!");
+                throw new Exception("Falha na conexão com banco de dados");
+            }
+
+            // Verificar se o banco existe
+            Console.WriteLine("Verificando se banco existe...");
+            var dbExists = await context.Database.EnsureCreatedAsync();
+            Console.WriteLine($"Banco criado: {dbExists}");
+
+            // Listar migrações pendentes
+            var pendingMigrations = await context.Database.GetPendingMigrationsAsync();
+            Console.WriteLine($"Migrações pendentes: {pendingMigrations.Count()}");
+
+            foreach (var migration in pendingMigrations)
+            {
+                Console.WriteLine($"  - {migration}");
+            }
+
+            // Aplicar migrações se existirem
+            if (pendingMigrations.Any())
+            {
+                Console.WriteLine("Aplicando migrações...");
+                await context.Database.MigrateAsync();
                 Console.WriteLine("Migrações aplicadas com sucesso!");
             }
-            else
-            {
-                Console.WriteLine("Banco de dados já está atualizado.");
-            }
+
+            Console.WriteLine("=== FIM DEBUG BANCO ===");
         }
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Erro ao executar migrações: {ex.Message}");
-        throw; // Re-lança a exceção para que a aplicação falhe se não conseguir criar o banco
+        Console.WriteLine($"ERRO DETALHADO: {ex.Message}");
+        Console.WriteLine($"Stack Trace: {ex.StackTrace}");
+
+        // Em caso de erro, tenta continuar sem o banco por enquanto
+        Console.WriteLine("AVISO: Continuando execução sem banco inicializado");
     }
 }
 
@@ -187,4 +223,5 @@ app.UseAuthorization();     // Middleware de autorização (JWT, policies, etc.)
 
 app.MapControllers(); // Mapeia os controllers
 
+Console.WriteLine("Aplicação iniciada com sucesso!");
 app.Run(); // Inicia a aplicação
