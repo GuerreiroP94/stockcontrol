@@ -10,6 +10,8 @@ using System.Text;
 using PreSystem.StockControl.Application.Validators;
 using FluentValidation;
 using FluentValidation.AspNetCore;
+using Microsoft.EntityFrameworkCore;
+using PreSystem.StockControl.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,7 +24,6 @@ if (builder.Environment.IsDevelopment())
     }
     catch (FileNotFoundException)
     {
-        // Arquivo .env não encontrado - continua sem ele
         Console.WriteLine("Arquivo .env não encontrado - usando variáveis de ambiente do sistema");
     }
 }
@@ -138,6 +139,39 @@ builder.Services.AddAuthentication(options =>
 });
 
 var app = builder.Build();
+
+// ==========================================
+// 🚀 AUTO-MIGRAÇÃO PARA RAILWAY/PRODUÇÃO
+// ==========================================
+if (app.Environment.IsProduction())
+{
+    try
+    {
+        using (var scope = app.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<StockControlDbContext>();
+
+            Console.WriteLine("Verificando se o banco precisa de migração...");
+
+            // Aplica migrações automaticamente
+            if (context.Database.GetPendingMigrations().Any())
+            {
+                Console.WriteLine("Executando migrações do banco de dados...");
+                context.Database.Migrate();
+                Console.WriteLine("Migrações aplicadas com sucesso!");
+            }
+            else
+            {
+                Console.WriteLine("Banco de dados já está atualizado.");
+            }
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Erro ao executar migrações: {ex.Message}");
+        throw; // Re-lança a exceção para que a aplicação falhe se não conseguir criar o banco
+    }
+}
 
 // Habilita o Swagger em ambiente de desenvolvimento
 if (app.Environment.IsDevelopment())
