@@ -10,10 +10,11 @@ using System.Text;
 using PreSystem.StockControl.Application.Validators;
 using FluentValidation;
 using FluentValidation.AspNetCore;
-using Microsoft.EntityFrameworkCore;
-using PreSystem.StockControl.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
+
+Console.WriteLine("=== INICIANDO APLICAÇÃO ===");
+Console.WriteLine($"Environment: {builder.Environment.EnvironmentName}");
 
 // IMPORTANTE: Carregar variáveis de ambiente do arquivo .env (apenas em desenvolvimento)
 if (builder.Environment.IsDevelopment())
@@ -21,6 +22,7 @@ if (builder.Environment.IsDevelopment())
     try
     {
         DotNetEnv.Env.Load();
+        Console.WriteLine("Arquivo .env carregado");
     }
     catch (FileNotFoundException)
     {
@@ -37,26 +39,12 @@ builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
     ["FrontendUrl"] = Environment.GetEnvironmentVariable("FRONTEND_URL") ?? "http://localhost:5173"
 });
 
-// Log da connection string (sem senha)
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-if (!string.IsNullOrEmpty(connectionString))
-{
-    var safeCString = connectionString.Contains("Password") ?
-        connectionString.Substring(0, connectionString.IndexOf("Password")) + "Password=***" :
-        connectionString;
-    Console.WriteLine($"Connection String: {safeCString}");
-}
+Console.WriteLine("Variáveis de ambiente configuradas");
 
-// Registro de dependências da aplicação
-//Aqui informamos ao ASP.NET Core como criar instâncias dos nossos serviços e repositórios
-builder.Services.AddScoped<IComponentRepository, ComponentRepository>(); // Injeta o repositório de componentes
-builder.Services.AddScoped<IComponentService, ComponentService>();       // Injeta o serviço de componentes
-builder.Services.AddHttpContextAccessor(); // Permite acessar o contexto HTTP atual (útil para recuperar dados do usuário logado)
-builder.Services.AddScoped<IUserContextService, UserContextService>(); // Injeta o serviço que fornece dados do usuário logado a partir do token JWT
-builder.Services.AddScoped<IUserRepository, UserRepository>(); // Injeta o repositório de usuários
-builder.Services.AddScoped<IUserService, UserService>(); // Injeta o serviço de usuários
-builder.Services.AddScoped<IPasswordResetTokenRepository, PasswordResetTokenRepository>(); // Repositório de tokens de reset
-builder.Services.AddScoped<IEmailService, EmailService>(); // Serviço de email
+// ==========================================
+// ⚠️ TEMPORÁRIO: SEM BANCO POR ENQUANTO
+// ==========================================
+Console.WriteLine("AVISO: Versão sem banco para teste inicial");
 
 // Configuração do CORS para permitir requisições do frontend
 builder.Services.AddCors(options =>
@@ -73,155 +61,66 @@ builder.Services.AddCors(options =>
             .AllowCredentials(); // Importante para cookies/auth
         });
 });
-// Serviços padrões da aplicação
-builder.Services.AddProjectDependencies(builder.Configuration); // Adiciona a DI do projeto (com configuração)
-builder.Services.AddControllers();         // Habilita os controllers
 
-builder.Services.AddValidatorsFromAssemblyContaining<ProductCreateDtoValidator>(); // Registra os validadores
-builder.Services.AddFluentValidationAutoValidation(); // Habilita validação automática nos controllers
+Console.WriteLine("CORS configurado");
 
-// Documentação da API com Swagger
+// Serviços básicos
+builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(c =>
-{
-    c.SwaggerDoc("v1", new() { Title = "PreSystem.StockControl", Version = "v1" });
 
-    //Adiciona suporte a JWT no Swagger
-    c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
-    {
-        Description = @"JWT Authorization header usando o esquema Bearer.
-                        Digite assim: 'Bearer {seu token}' (sem aspas)",
-        Name = "Authorization",
-        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
-        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
-        Scheme = "Bearer"
-    });
+Console.WriteLine("Serviços básicos adicionados");
 
-    c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement()
-    {
-        {
-            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
-            {
-                Reference = new Microsoft.OpenApi.Models.OpenApiReference
-                {
-                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
-                    Id = "Bearer"
-                },
-                Scheme = "oauth2",
-                Name = "Bearer",
-                In = Microsoft.OpenApi.Models.ParameterLocation.Header,
-            },
-            new List<string>()
-        }
-    });
-});
+// JWT simplificado
+var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET") ?? "fallback-secret-key-for-testing-only";
+var key = Encoding.ASCII.GetBytes(jwtSecret);
 
-// Chave secreta para assinatura do token (em produção, armazene no appsettings)
-var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-var secretKey = jwtSettings.GetValue<string>("Secret");
-
-// Validação para evitar null
-if (string.IsNullOrEmpty(secretKey))
-    throw new InvalidOperationException("JWT Secret Key is missing in appsettings.json");
-
-var key = Encoding.ASCII.GetBytes(secretKey);
-
-// Configura a autenticação JWT com validação de assinatura, emissor e audiência
-builder.Services.AddAuthentication(options =>
-{
-    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-})
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 .AddJwtBearer(options =>
 {
     options.RequireHttpsMetadata = false;
     options.SaveToken = true;
     options.TokenValidationParameters = new TokenValidationParameters
     {
-        ValidateIssuerSigningKey = true,                                // Valida a assinatura do token
-        IssuerSigningKey = new SymmetricSecurityKey(key),               // Chave usada na assinatura
-
-        ValidateIssuer = true,                                          // Ativa a validação do emissor
-        ValidateAudience = true,                                        // Ativa a validação da audiência
-        ValidIssuer = jwtSettings.GetValue<string>("Issuer"),           // Define o emissor válido (do appsettings.json)
-        ValidAudience = jwtSettings.GetValue<string>("Audience")        // Define a audiência válida (do appsettings.json)
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(key),
+        ValidateIssuer = false,      // Simplificado
+        ValidateAudience = false,    // Simplificado
     };
 });
 
+Console.WriteLine("JWT configurado");
+
+// Swagger básico
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new() { Title = "PreSystem.StockControl", Version = "v1" });
+});
+
+Console.WriteLine("Swagger configurado");
+
 var app = builder.Build();
 
-// ==========================================
-// 🚀 DEBUG E CONFIGURAÇÃO DO BANCO
-// ==========================================
-if (app.Environment.IsProduction())
-{
-    try
-    {
-        using (var scope = app.Services.CreateScope())
-        {
-            var context = scope.ServiceProvider.GetRequiredService<StockControlDbContext>();
+Console.WriteLine("Aplicação construída, iniciando middlewares...");
 
-            Console.WriteLine("=== INÍCIO DEBUG BANCO ===");
+// Middlewares básicos
+app.UseCors("AllowFrontend");
+app.UseAuthentication();
+app.UseAuthorization();
 
-            // Testar conexão
-            Console.WriteLine("Testando conexão com banco...");
-            var canConnect = await context.Database.CanConnectAsync();
-            Console.WriteLine($"Conectado ao banco: {canConnect}");
+// Swagger sempre ativo para teste
+app.UseSwagger();
+app.UseSwaggerUI();
 
-            if (!canConnect)
-            {
-                Console.WriteLine("ERRO: Não foi possível conectar ao banco!");
-                throw new Exception("Falha na conexão com banco de dados");
-            }
+Console.WriteLine("Middlewares configurados");
 
-            // Verificar se o banco existe
-            Console.WriteLine("Verificando se banco existe...");
-            var dbExists = await context.Database.EnsureCreatedAsync();
-            Console.WriteLine($"Banco criado: {dbExists}");
+// Endpoint de teste
+app.MapGet("/", () => "PreSystem Stock Control API está funcionando!");
+app.MapGet("/health", () => new { Status = "OK", Timestamp = DateTime.UtcNow });
 
-            // Listar migrações pendentes
-            var pendingMigrations = await context.Database.GetPendingMigrationsAsync();
-            Console.WriteLine($"Migrações pendentes: {pendingMigrations.Count()}");
+app.MapControllers();
 
-            foreach (var migration in pendingMigrations)
-            {
-                Console.WriteLine($"  - {migration}");
-            }
+Console.WriteLine("Rotas mapeadas");
 
-            // Aplicar migrações se existirem
-            if (pendingMigrations.Any())
-            {
-                Console.WriteLine("Aplicando migrações...");
-                await context.Database.MigrateAsync();
-                Console.WriteLine("Migrações aplicadas com sucesso!");
-            }
+Console.WriteLine("=== APLICAÇÃO PRONTA PARA INICIAR ===");
 
-            Console.WriteLine("=== FIM DEBUG BANCO ===");
-        }
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"ERRO DETALHADO: {ex.Message}");
-        Console.WriteLine($"Stack Trace: {ex.StackTrace}");
-
-        // Em caso de erro, tenta continuar sem o banco por enquanto
-        Console.WriteLine("AVISO: Continuando execução sem banco inicializado");
-    }
-}
-
-// Habilita o Swagger em ambiente de desenvolvimento
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
-
-app.UseCors("AllowFrontend"); // Permite requisições do frontend React (Vite)
-app.UseHttpsRedirection();  // Redirecionamento para HTTPS
-app.UseAuthentication();     // Habilita o middleware de autenticação para validar o token JWT enviado nas requisições
-app.UseAuthorization();     // Middleware de autorização (JWT, policies, etc.)
-
-app.MapControllers(); // Mapeia os controllers
-
-Console.WriteLine("Aplicação iniciada com sucesso!");
-app.Run(); // Inicia a aplicação
+app.Run();
