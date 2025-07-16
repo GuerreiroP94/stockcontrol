@@ -1,56 +1,48 @@
 ﻿var builder = WebApplication.CreateBuilder(args);
 
-Console.WriteLine("=== ULTRA MINIMAL VERSION ===");
-Console.WriteLine($"Environment: {builder.Environment.EnvironmentName}");
-Console.WriteLine($"Content Root: {builder.Environment.ContentRootPath}");
+Console.WriteLine("=== INICIANDO COM CONFIGURAÇÃO DE PORTA ===");
 
-// APENAS o absolutamente básico
+// Configurar porta explicitamente
+var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
+Console.WriteLine($"Configurando porta: {port}");
+
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.ListenAnyIP(int.Parse(port));
+});
+
+Console.WriteLine("Kestrel configurado");
+
+// Apenas o básico
 builder.Services.AddControllers();
 
-Console.WriteLine("Services added successfully");
+Console.WriteLine("Services adicionados");
 
 var app = builder.Build();
 
-Console.WriteLine("App built successfully");
+Console.WriteLine("App construído");
 
-// Endpoint de teste simples
+// Endpoints básicos
 app.MapGet("/", () =>
 {
-    Console.WriteLine("Root endpoint accessed");
-    return "🚀 PreSystem API FUNCIONANDO! " + DateTime.UtcNow.ToString();
+    Console.WriteLine("Endpoint / acessado");
+    return $"API funcionando na porta {port}! {DateTime.UtcNow}";
 });
 
 app.MapGet("/health", () =>
 {
-    Console.WriteLine("Health endpoint accessed");
+    Console.WriteLine("Endpoint /health acessado");
     return new
     {
         Status = "OK",
-        Timestamp = DateTime.UtcNow,
-        Environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"),
-        Message = "Sistema funcionando perfeitamente!"
+        Port = port,
+        Timestamp = DateTime.UtcNow
     };
 });
 
-app.MapGet("/test", () =>
-{
-    Console.WriteLine("Test endpoint accessed");
-    return new
-    {
-        Success = true,
-        Data = "Endpoint de teste OK",
-        Variables = new
-        {
-            JWT_SECRET = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("JWT_SECRET")),
-            EMAIL_FROM = Environment.GetEnvironmentVariable("EMAIL_FROM"),
-            FRONTEND_URL = Environment.GetEnvironmentVariable("FRONTEND_URL")
-        }
-    };
-});
+Console.WriteLine("Rotas mapeadas");
 
-Console.WriteLine("Routes mapped successfully");
-
-Console.WriteLine("=== STARTING APPLICATION ===");
+Console.WriteLine($"=== INICIANDO NA PORTA {port} ===");
 
 try
 {
@@ -58,7 +50,12 @@ try
 }
 catch (Exception ex)
 {
-    Console.WriteLine($"CRITICAL ERROR: {ex.Message}");
-    Console.WriteLine($"Stack Trace: {ex.StackTrace}");
+    Console.WriteLine($"ERRO CRÍTICO: {ex.GetType().Name}: {ex.Message}");
+    if (ex.InnerException != null)
+    {
+        Console.WriteLine($"INNER EXCEPTION: {ex.InnerException.GetType().Name}: {ex.InnerException.Message}");
+    }
+    Console.WriteLine("=== STACK TRACE ===");
+    Console.WriteLine(ex.StackTrace);
     throw;
 }
