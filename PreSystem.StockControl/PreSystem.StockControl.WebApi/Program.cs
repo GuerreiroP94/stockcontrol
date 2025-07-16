@@ -13,8 +13,7 @@ using FluentValidation.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// IMPORTANTE: Carregar variáveis de ambiente do arquivo .env
-//DotNetEnv.Env.Load();
+// IMPORTANTE: Carregar variáveis de ambiente do arquivo .env (apenas em desenvolvimento)
 if (builder.Environment.IsDevelopment())
 {
     try
@@ -23,6 +22,7 @@ if (builder.Environment.IsDevelopment())
     }
     catch (FileNotFoundException)
     {
+        // Arquivo .env não encontrado - continua sem ele
         Console.WriteLine("Arquivo .env não encontrado - usando variáveis de ambiente do sistema");
     }
 }
@@ -34,7 +34,6 @@ builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
     ["EmailSettings:SmtpPassword"] = Environment.GetEnvironmentVariable("EMAIL_SMTP_PASSWORD"),
     ["EmailSettings:FromEmail"] = Environment.GetEnvironmentVariable("EMAIL_FROM"),
     ["FrontendUrl"] = Environment.GetEnvironmentVariable("FRONTEND_URL") ?? "http://localhost:5173"
-
 });
 
 // Registro de dependências da aplicação
@@ -151,6 +150,7 @@ app.UseCors("AllowFrontend"); // Permite requisições do frontend React (Vite)
 app.UseHttpsRedirection();  // Redirecionamento para HTTPS
 app.UseAuthentication();     // Habilita o middleware de autenticação para validar o token JWT enviado nas requisições
 app.UseAuthorization();     // Middleware de autorização (JWT, policies, etc.)
-app.MapControllers();       // Mapeia automaticamente todos os controllers da aplicação
 
-app.Run();                  // Inicia a aplicação
+app.MapControllers(); // Mapeia os controllers
+
+app.Run(); // Inicia a aplicação
