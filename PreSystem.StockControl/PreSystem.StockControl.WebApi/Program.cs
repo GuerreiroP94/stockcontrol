@@ -14,7 +14,18 @@ using FluentValidation.AspNetCore;
 var builder = WebApplication.CreateBuilder(args);
 
 // IMPORTANTE: Carregar variáveis de ambiente do arquivo .env
-DotNetEnv.Env.Load();
+//DotNetEnv.Env.Load();
+if (builder.Environment.IsDevelopment())
+{
+    try
+    {
+        DotNetEnv.Env.Load();
+    }
+    catch (FileNotFoundException)
+    {
+        Console.WriteLine("Arquivo .env não encontrado - usando variáveis de ambiente do sistema");
+    }
+}
 
 // Adicionar as variáveis de ambiente à configuração
 builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
