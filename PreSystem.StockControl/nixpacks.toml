@@ -3,9 +3,14 @@ nixPkgs = ["dotnet-sdk_8"]
 
 [phases.build]
 cmds = [
-  "dotnet restore",
-  "dotnet publish -c Release -o out"
+  "dotnet restore --verbosity normal",
+  "dotnet build --configuration Release --verbosity normal",
+  "dotnet publish --configuration Release --output out --verbosity normal"
 ]
 
 [start]
-cmd = "dotnet out/PreSystem.StockControl.WebApi.dll"
+cmd = "dotnet out/PreSystem.StockControl.WebApi.dll --urls http://0.0.0.0:$PORT"
+
+[variables]
+ASPNETCORE_ENVIRONMENT = "Production"
+DOTNET_RUNNING_IN_CONTAINER = "true"
