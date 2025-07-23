@@ -42,14 +42,14 @@ if (!string.IsNullOrEmpty(connectionString))
     // Converter DATABASE_URL do Railway para connection string do .NET
     var databaseUri = new Uri(connectionString);
     var userInfo = databaseUri.UserInfo.Split(':');
-
+    
     connectionString = $"Host={databaseUri.Host};" +
                       $"Port={databaseUri.Port};" +
                       $"Database={databaseUri.LocalPath.TrimStart('/')};" +
                       $"Username={userInfo[0]};" +
                       $"Password={userInfo[1]};" +
                       $"SSL Mode=Require;Trust Server Certificate=true";
-
+    
     builder.Configuration["ConnectionStrings:DefaultConnection"] = connectionString;
 }
 
@@ -62,27 +62,33 @@ builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
     ["FrontendUrl"] = Environment.GetEnvironmentVariable("FRONTEND_URL") ?? "http://localhost:3000"
 });
 
-// Configuração do CORS
+// Configuração do CORS - CORRIGIDA
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend",
         policy =>
         {
             var frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL");
+            
+            // Lista de origens permitidas
+            var allowedOrigins = new List<string>();
+            
+            // Adicionar URLs do ambiente
             if (!string.IsNullOrEmpty(frontendUrl))
             {
-                policy.WithOrigins(frontendUrl.Split(','))
-                      .AllowAnyHeader()
-                      .AllowAnyMethod()
-                      .AllowCredentials();
+                allowedOrigins.AddRange(frontendUrl.Split(','));
             }
-            else
-            {
-                policy.WithOrigins("http://localhost:3000", "http://localhost:5173")
-                      .AllowAnyHeader()
-                      .AllowAnyMethod()
-                      .AllowCredentials();
-            }
+            
+            // Adicionar localhost para desenvolvimento
+            allowedOrigins.Add("http://localhost:3000");
+            allowedOrigins.Add("http://localhost:5173");
+            allowedOrigins.Add("http://localhost:5000");
+            
+            // Configurar CORS corretamente
+            policy.WithOrigins(allowedOrigins.ToArray())
+                  .AllowAnyHeader()
+                  .AllowAnyMethod()
+                  .AllowCredentials();
         });
 });
 
@@ -136,24 +142,26 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-// Health checks (sem o AddDbContextCheck que não existe)
+// Health checks
 builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
-// Aplicar migrations automaticamente (útil para produção)
-using (var scope = app.Services.CreateScope())
+// Aplicar migrations automaticamente (com tratamento de erro melhorado)
+try
 {
-    try
+    using (var scope = app.Services.CreateScope())
     {
         var dbContext = scope.ServiceProvider.GetRequiredService<StockControlDbContext>();
+        Console.WriteLine("Aplicando migrations...");
         dbContext.Database.Migrate();
         Console.WriteLine("Migrations aplicadas com sucesso!");
     }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Erro ao aplicar migrations: {ex.Message}");
-    }
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"Erro ao aplicar migrations: {ex.Message}");
+    // Não falhar a aplicação se as migrations falharem
 }
 
 // Middlewares
