@@ -2,11 +2,12 @@
 using PreSystem.StockControl.Application.Services;
 using PreSystem.StockControl.Domain.Interfaces.Repositories;
 using PreSystem.StockControl.Infrastructure.Repositories;
+using PreSystem.StockControl.Infrastructure.Persistence;
 using PreSystem.StockControl.WebApi.Configurations;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
-using PreSystem.StockControl.Application.Validators;
 using FluentValidation;
 using FluentValidation.AspNetCore;
 
@@ -20,7 +21,7 @@ var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
 builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 Console.WriteLine($"Aplicação configurada para porta: {port}");
 
-// IMPORTANTE: Carregar variáveis de ambiente do arquivo .env (apenas em desenvolvimento)
+// Carregar variáveis de ambiente
 if (builder.Environment.IsDevelopment())
 {
     try
@@ -30,8 +31,26 @@ if (builder.Environment.IsDevelopment())
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Arquivo .env não encontrado - usando variáveis de ambiente do sistema: {ex.Message}");
+        Console.WriteLine($"Arquivo .env não encontrado: {ex.Message}");
     }
+}
+
+// Configurar connection string do PostgreSQL
+var connectionString = Environment.GetEnvironmentVariable("DATABASE_URL");
+if (!string.IsNullOrEmpty(connectionString))
+{
+    // Converter DATABASE_URL do Railway para connection string do .NET
+    var databaseUri = new Uri(connectionString);
+    var userInfo = databaseUri.UserInfo.Split(':');
+
+    connectionString = $"Host={databaseUri.Host};" +
+                      $"Port={databaseUri.Port};" +
+                      $"Database={databaseUri.LocalPath.TrimStart('/')};" +
+                      $"Username={userInfo[0]};" +
+                      $"Password={userInfo[1]};" +
+                      $"SSL Mode=Require;Trust Server Certificate=true";
+
+    builder.Configuration["ConnectionStrings:DefaultConnection"] = connectionString;
 }
 
 // Adicionar as variáveis de ambiente à configuração
@@ -40,17 +59,10 @@ builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
     ["EmailSettings:SmtpUser"] = Environment.GetEnvironmentVariable("EMAIL_SMTP_USER"),
     ["EmailSettings:SmtpPassword"] = Environment.GetEnvironmentVariable("EMAIL_SMTP_PASSWORD"),
     ["EmailSettings:FromEmail"] = Environment.GetEnvironmentVariable("EMAIL_FROM"),
-    ["FrontendUrl"] = Environment.GetEnvironmentVariable("FRONTEND_URL") ?? "http://localhost:5173"
+    ["FrontendUrl"] = Environment.GetEnvironmentVariable("FRONTEND_URL") ?? "http://localhost:3000"
 });
 
-Console.WriteLine("Variáveis de ambiente configuradas");
-
-// ==========================================
-// ⚠️ TEMPORÁRIO: SEM BANCO POR ENQUANTO
-// ==========================================
-Console.WriteLine("AVISO: Versão sem banco para teste inicial");
-
-// Configuração do CORS para permitir requisições do frontend
+// Configuração do CORS
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend",
@@ -66,108 +78,105 @@ builder.Services.AddCors(options =>
             }
             else
             {
-                // Em desenvolvimento
-                policy.WithOrigins(
-                    "http://localhost:3000",  // Create React App
-                    "http://localhost:5173"   // Vite
-                )
-                .AllowAnyHeader()
-                .AllowAnyMethod()
-                .AllowCredentials();
+                policy.WithOrigins("http://localhost:3000", "http://localhost:5173")
+                      .AllowAnyHeader()
+                      .AllowAnyMethod()
+                      .AllowCredentials();
             }
         });
 });
 
-Console.WriteLine("CORS configurado");
+// Adicionar DbContext
+builder.Services.AddDbContext<StockControlDbContext>(options =>
+{
+    var connStr = builder.Configuration.GetConnectionString("DefaultConnection");
+    if (!string.IsNullOrEmpty(connStr))
+    {
+        options.UseNpgsql(connStr);
+        Console.WriteLine("PostgreSQL configurado com sucesso");
+    }
+    else
+    {
+        Console.WriteLine("AVISO: Connection string não encontrada!");
+    }
+});
+
+// Adicionar todas as dependências do projeto
+builder.Services.AddProjectDependencies(builder.Configuration);
+
+// Adicionar User Repository (que estava faltando)
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IUserService, UserService>();
 
 // Serviços básicos
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddFluentValidation(fv => fv.RegisterValidatorsFromAssemblyContaining<Program>());
+
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 
-Console.WriteLine("Serviços básicos adicionados");
-
-// JWT simplificado
-var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET") ?? "fallback-secret-key-for-testing-only";
+// JWT
+var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET") ?? "chave-secreta-super-segura-para-producao-123456";
 var key = Encoding.ASCII.GetBytes(jwtSecret);
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-.AddJwtBearer(options =>
-{
-    options.RequireHttpsMetadata = false;
-    options.SaveToken = true;
-    options.TokenValidationParameters = new TokenValidationParameters
+    .AddJwtBearer(options =>
     {
-        ValidateIssuerSigningKey = true,
-        IssuerSigningKey = new SymmetricSecurityKey(key),
-        ValidateIssuer = false,      // Simplificado
-        ValidateAudience = false,    // Simplificado
-    };
-});
-
-Console.WriteLine("JWT configurado");
-
-// Swagger básico
-builder.Services.AddSwaggerGen(c =>
-{
-    c.SwaggerDoc("v1", new() { Title = "PreSystem.StockControl", Version = "v1" });
-});
-
-Console.WriteLine("Swagger configurado");
+        options.RequireHttpsMetadata = false;
+        options.SaveToken = true;
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(key),
+            ValidateIssuer = false,
+            ValidateAudience = false,
+            ClockSkew = TimeSpan.Zero
+        };
+    });
 
 // Health checks
-builder.Services.AddHealthChecks();
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<StockControlDbContext>();
 
 var app = builder.Build();
 
-Console.WriteLine("Aplicação construída, iniciando middlewares...");
-
-// Tratamento de exceções global
-app.UseExceptionHandler("/error");
-app.Map("/error", (HttpContext context) =>
+// Aplicar migrations automaticamente (útil para produção)
+using (var scope = app.Services.CreateScope())
 {
-    var exception = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>()?.Error;
-    Console.WriteLine($"Erro capturado: {exception?.Message}");
-    Console.WriteLine($"Stack Trace: {exception?.StackTrace}");
-    return Results.Problem("Um erro ocorreu ao processar sua requisição.");
-});
+    try
+    {
+        var dbContext = scope.ServiceProvider.GetRequiredService<StockControlDbContext>();
+        dbContext.Database.Migrate();
+        Console.WriteLine("Migrations aplicadas com sucesso!");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Erro ao aplicar migrations: {ex.Message}");
+    }
+}
 
-// Middlewares básicos
+// Middlewares
 app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Swagger sempre ativo para teste
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
     c.SwaggerEndpoint("/swagger/v1/swagger.json", "PreSystem.StockControl v1");
-    c.RoutePrefix = string.Empty; // Swagger na raiz
+    c.RoutePrefix = string.Empty;
 });
 
-Console.WriteLine("Middlewares configurados");
-
 // Endpoints
-app.MapGet("/", () => new {
-    message = "PreSystem Stock Control API está funcionando!",
-    environment = app.Environment.EnvironmentName,
+app.MapGet("/", () => new
+{
+    message = "PreSystem Stock Control API",
+    status = "running",
     timestamp = DateTime.UtcNow
 });
 
-app.MapGet("/health", () => new { Status = "OK", Timestamp = DateTime.UtcNow });
+app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
 app.MapHealthChecks("/healthz");
-
 app.MapControllers();
 
-Console.WriteLine("Rotas mapeadas");
-Console.WriteLine($"=== APLICAÇÃO PRONTA PARA INICIAR NA PORTA {port} ===");
-
-try
-{
-    app.Run();
-}
-catch (Exception ex)
-{
-    Console.WriteLine($"ERRO FATAL: {ex.Message}");
-    Console.WriteLine($"Stack Trace: {ex.StackTrace}");
-    throw;
-}
+app.Run();
