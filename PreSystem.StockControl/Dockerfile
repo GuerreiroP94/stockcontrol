@@ -2,18 +2,18 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build-env
 WORKDIR /app
 
-# Copy solution and project files
-COPY PreSystem.StockControl/*.sln ./
-COPY PreSystem.StockControl/PreSystem.StockControl.WebApi/*.csproj ./PreSystem.StockControl.WebApi/
-COPY PreSystem.StockControl/PreSystem.StockControl.Application/*.csproj ./PreSystem.StockControl.Application/
-COPY PreSystem.StockControl/PreSystem.StockControl.Domain/*.csproj ./PreSystem.StockControl.Domain/
-COPY PreSystem.StockControl/PreSystem.StockControl.Infrastructure/*.csproj ./PreSystem.StockControl.Infrastructure/
+# Copy solution and project files (ajustar caminhos)
+COPY *.sln ./
+COPY PreSystem.StockControl.WebApi/*.csproj ./PreSystem.StockControl.WebApi/
+COPY PreSystem.StockControl.Application/*.csproj ./PreSystem.StockControl.Application/
+COPY PreSystem.StockControl.Domain/*.csproj ./PreSystem.StockControl.Domain/
+COPY PreSystem.StockControl.Infrastructure/*.csproj ./PreSystem.StockControl.Infrastructure/
 
 # Restore dependencies
 RUN dotnet restore
 
 # Copy everything else
-COPY PreSystem.StockControl/ ./
+COPY . ./
 
 # Build and publish
 RUN dotnet publish PreSystem.StockControl.WebApi/PreSystem.StockControl.WebApi.csproj -c Release -o out
