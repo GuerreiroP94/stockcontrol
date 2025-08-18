@@ -63,18 +63,8 @@ builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
     ["FrontendUrl"] = Environment.GetEnvironmentVariable("FRONTEND_URL") ?? "https://stock-control-frontend.onrender.com"
 });
 
-// ⚠️ CORS CONFIGURATION - FUNCIONAL PARA RENDER
-Console.WriteLine("🌐 Configurando CORS...");
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowAll", policy =>
-    {
-        policy
-            .AllowAnyOrigin()
-            .AllowAnyHeader()
-            .AllowAnyMethod();
-    });
-});
+// ⚠️ REMOVIDO: CORS tradicional (que estava causando problemas)
+Console.WriteLine("🌐 CORS será configurado como middleware personalizado...");
 
 // Adicionar DbContext
 builder.Services.AddDbContext<StockControlDbContext>(options =>
@@ -164,21 +154,24 @@ app.UseSwaggerUI(c =>
     c.RoutePrefix = "swagger";
 });
 
-// ⚠️ CORS DEVE SER O PRIMEIRO MIDDLEWARE
-app.UseCors("AllowAll");
-
-// ⚠️ MIDDLEWARE PARA OPTIONS (CORS PREFLIGHT)
+// ⚠️ 🚀 CORS NUCLEAR - SOLUÇÃO DEFINITIVA 🚀
 app.Use(async (context, next) =>
 {
+    // Adicionar headers CORS para TODAS as requisições
+    context.Response.Headers["Access-Control-Allow-Origin"] = "*";
+    context.Response.Headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS";
+    context.Response.Headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, Origin, Accept, X-Requested-With";
+    context.Response.Headers["Access-Control-Max-Age"] = "86400";
+
+    // Se for OPTIONS, retorna 200 direto
     if (context.Request.Method == "OPTIONS")
     {
         Console.WriteLine($"🔧 OPTIONS request para: {context.Request.Path}");
-        context.Response.Headers["Access-Control-Allow-Origin"] = "*";
-        context.Response.Headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS";
-        context.Response.Headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, Origin, Accept";
         context.Response.StatusCode = 200;
+        await context.Response.WriteAsync("");
         return;
     }
+
     await next();
 });
 
@@ -263,7 +256,7 @@ app.MapHealthChecks("/healthz");
 app.MapControllers();
 
 Console.WriteLine("=== ✅ APLICAÇÃO INICIADA COM SUCESSO ===");
-Console.WriteLine($"🌐 CORS: AllowAll policy ativa");
+Console.WriteLine($"🌐 CORS: Middleware nuclear ativo");
 Console.WriteLine($"🔗 Frontend URL: {Environment.GetEnvironmentVariable("FRONTEND_URL")}");
 Console.WriteLine($"📊 Swagger disponível em: /swagger");
 
