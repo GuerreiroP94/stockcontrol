@@ -11,11 +11,11 @@ const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  
+
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  
+
   const from = location.state?.from?.pathname || '/dashboard';
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -54,8 +54,8 @@ const LoginPage: React.FC = () => {
 
         {/* Error Message */}
         {error && (
-          <ErrorMessage 
-            message={error} 
+          <ErrorMessage
+            message={error}
             onClose={() => setError('')}
             className="mb-4"
           />
@@ -133,8 +133,8 @@ const LoginPage: React.FC = () => {
         <div className="mt-6 p-4 bg-blue-50 rounded-lg">
           <p className="text-sm text-blue-800 font-medium mb-2">Credenciais de Demonstração:</p>
           <div className="space-y-1 text-sm text-blue-700">
-            <p>Admin: admin@presystem.com / admin123</p>
-            <p>Operador: operador@presystem.com / oper123</p>
+            <p>Admin: admin@stockcontrol.com / admin123</p>
+            <p>Operador: operador@stockcontrol.com / operador123</p>
           </div>
         </div>
       </div>

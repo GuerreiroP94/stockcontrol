@@ -56,14 +56,19 @@ namespace PreSystem.StockControl.WebApi.Controllers
                 new Claim(ClaimTypes.Role, user.Role ?? "operator")
             };
 
-            // 3. Pega os dados do appsettings.json
-            var jwtSettings = _configuration.GetSection("JwtSettings");
-            var secretKey = jwtSettings.GetValue<string>("Secret");
-            var issuer = jwtSettings.GetValue<string>("Issuer");
-            var audience = jwtSettings.GetValue<string>("Audience");
+            // 3. Obtém a chave JWT (primeiro tenta variável de ambiente, depois appsettings)
+            var secretKey = Environment.GetEnvironmentVariable("JWT_SECRET") ??
+                            _configuration.GetValue<string>("JwtSettings:Secret") ??
+                            "chave-secreta-super-segura-para-producao-123456";
+
+            // Para compatibilidade, definir issuer e audience como opcionais
+            var issuer = _configuration.GetValue<string>("JwtSettings:Issuer") ?? "PreSystemStockControl";
+            var audience = _configuration.GetValue<string>("JwtSettings:Audience") ?? "PreSystemStockControl";
+
+            Console.WriteLine($"🔑 JWT Secret obtido (length: {secretKey.Length})");
 
             if (string.IsNullOrEmpty(secretKey))
-                throw new InvalidOperationException("JWT Secret Key is missing in appsettings.json");
+                throw new InvalidOperationException("JWT Secret Key não encontrado nem em variável de ambiente nem em appsettings.json");
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -76,7 +81,6 @@ namespace PreSystem.StockControl.WebApi.Controllers
                 expires: DateTime.UtcNow.AddHours(2),
                 signingCredentials: creds
             );
-
             var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
 
             // 5. Retorna o token junto com informações do usuário (opcional mas útil)
