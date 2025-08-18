@@ -1,29 +1,45 @@
 ﻿# Build stage
-FROM node:18-alpine as build
+FROM node:18-alpine AS build
 WORKDIR /app
+
+# Copy package files
 COPY package*.json ./
-RUN npm ci
+
+# Install dependencies
+RUN npm ci --only=production
+
+# Copy source code
 COPY . .
+
+# Build the application
 RUN npm run build
 
 # Production stage
 FROM nginx:alpine
 
-# Remove configuração padrão do nginx
+# Remove default nginx configuration
 RUN rm /etc/nginx/conf.d/default.conf
-RUN rm /etc/nginx/nginx.conf
 
-# Copiar arquivos de configuração personalizados
-COPY nginx.conf /etc/nginx/nginx.conf
-COPY default.conf /etc/nginx/conf.d/default.conf
+# Copy custom nginx configuration
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Copiar arquivos da build
+# Copy built application
 COPY --from=build /app/build /usr/share/nginx/html
 
-# Criar diretórios necessários
-RUN mkdir -p /var/log/nginx
-RUN mkdir -p /var/run
+# Create nginx directories
+RUN mkdir -p /var/cache/nginx/client_temp && \
+    mkdir -p /var/cache/nginx/proxy_temp && \
+    mkdir -p /var/cache/nginx/fastcgi_temp && \
+    mkdir -p /var/cache/nginx/uwsgi_temp && \
+    mkdir -p /var/cache/nginx/scgi_temp
 
+# Set proper permissions
+RUN chown -R nginx:nginx /var/cache/nginx && \
+    chown -R nginx:nginx /usr/share/nginx/html && \
+    chmod -R 755 /usr/share/nginx/html
+
+# Expose port
 EXPOSE 80
 
+# Start nginx
 CMD ["nginx", "-g", "daemon off;"]
