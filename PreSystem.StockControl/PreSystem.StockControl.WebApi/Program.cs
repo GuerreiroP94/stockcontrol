@@ -63,45 +63,18 @@ builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
     ["FrontendUrl"] = Environment.GetEnvironmentVariable("FRONTEND_URL") ?? "http://localhost:3000"
 });
 
-// SUBSTITUIR A SEÇÃO DE CORS POR ESTA:
 // Configuração do CORS - CORRIGIDA PARA RENDER
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
         policy
-            .SetIsOriginAllowed(origin =>
-            {
-                Console.WriteLine($"🌐 CORS Origin request: {origin}");
-
-                // Lista de origens permitidas
-                var allowedOrigins = new[]
-                {
-                    "https://stock-control-frontend.onrender.com",
-                    "http://localhost:3000",
-                    "http://localhost:5173",
-                    "http://localhost:8080"
-                };
-
-                // Verificar se a origem está na lista
-                var isAllowed = allowedOrigins.Contains(origin);
-
-                // Durante debug, também aceitar qualquer origem do Render
-                if (!isAllowed && origin?.Contains("onrender.com") == true)
-                {
-                    isAllowed = true;
-                    Console.WriteLine($"✅ Render origin aceito: {origin}");
-                }
-
-                Console.WriteLine($"🔍 Origin {origin} permitido: {isAllowed}");
-                return isAllowed;
-            })
+            .WithOrigins("https://stock-control-frontend.onrender.com")
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials();
     });
 });
-
 // Adicionar DbContext
 builder.Services.AddDbContext<StockControlDbContext>(options =>
 {
