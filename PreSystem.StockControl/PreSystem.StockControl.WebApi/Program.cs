@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using FluentValidation;
 using FluentValidation.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -62,39 +63,16 @@ builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
     ["FrontendUrl"] = Environment.GetEnvironmentVariable("FRONTEND_URL") ?? "https://stock-control-frontend.onrender.com"
 });
 
-// ⚠️ CORS CONFIGURAÇÃO CRÍTICA PARA RENDER
+// ⚠️ CORS CONFIGURATION - FUNCIONAL PARA RENDER
 Console.WriteLine("🌐 Configurando CORS...");
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
     {
         policy
-            .SetIsOriginAllowed(origin =>
-            {
-                Console.WriteLine($"🔍 CORS Origin checando: {origin}");
-
-                // Permitir origens vazias (para ferramentas)
-                if (string.IsNullOrEmpty(origin))
-                {
-                    Console.WriteLine("✅ Origin vazio - permitido");
-                    return true;
-                }
-
-                // Permitir Render e localhost
-                if (origin.Contains("onrender.com") ||
-                    origin.Contains("localhost") ||
-                    origin.Contains("127.0.0.1"))
-                {
-                    Console.WriteLine($"✅ Origin permitido: {origin}");
-                    return true;
-                }
-
-                Console.WriteLine($"❌ Origin negado: {origin}");
-                return false;
-            })
+            .AllowAnyOrigin()
             .AllowAnyHeader()
-            .AllowAnyMethod()
-            .AllowCredentials();
+            .AllowAnyMethod();
     });
 });
 
@@ -131,7 +109,7 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddFluentValidationAutoValidation();
 builder.Services.AddFluentValidationClientsideAdapters();
 
-// ⚠️ JWT CONFIGURAÇÃO
+// ⚠️ JWT CONFIGURAÇÃO CORRIGIDA
 var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET") ?? "chave-super-secreta-para-desenvolvimento";
 Console.WriteLine($"✅ JWT Secret configurado (length: {jwtSecret.Length})");
 
@@ -148,7 +126,32 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
+// Health checks
+builder.Services.AddHealthChecks();
+
 var app = builder.Build();
+
+// ⚠️ MIGRAÇÃO AUTOMÁTICA E SEED (PARA RENDER)
+try
+{
+    using (var scope = app.Services.CreateScope())
+    {
+        var context = scope.ServiceProvider.GetRequiredService<StockControlDbContext>();
+
+        Console.WriteLine("🔄 Executando migrações...");
+        await context.Database.MigrateAsync();
+        Console.WriteLine("✅ Migrações executadas com sucesso");
+
+        Console.WriteLine("🌱 Executando seed...");
+        await DatabaseSeeder.SeedAsync(context);
+        Console.WriteLine("✅ Seed executado com sucesso");
+    }
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"❌ Erro durante migração/seed: {ex.Message}");
+    Console.WriteLine($"StackTrace: {ex.StackTrace}");
+}
 
 // ⚠️ CONFIGURAÇÃO DE MIDDLEWARE PARA RENDER
 Console.WriteLine("🔧 Configurando middleware...");
@@ -161,8 +164,23 @@ app.UseSwaggerUI(c =>
     c.RoutePrefix = "swagger";
 });
 
-// ⚠️ CORS DEVE VIR ANTES DE AUTHENTICATION
+// ⚠️ CORS DEVE SER O PRIMEIRO MIDDLEWARE
 app.UseCors("AllowAll");
+
+// ⚠️ MIDDLEWARE PARA OPTIONS (CORS PREFLIGHT)
+app.Use(async (context, next) =>
+{
+    if (context.Request.Method == "OPTIONS")
+    {
+        Console.WriteLine($"🔧 OPTIONS request para: {context.Request.Path}");
+        context.Response.Headers["Access-Control-Allow-Origin"] = "*";
+        context.Response.Headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS";
+        context.Response.Headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, Origin, Accept";
+        context.Response.StatusCode = 200;
+        return;
+    }
+    await next();
+});
 
 // Autenticação e autorização
 app.UseAuthentication();
@@ -223,30 +241,26 @@ app.MapGet("/debug/cors", (HttpContext context) =>
     });
 });
 
+// Endpoint de teste POST
+app.MapPost("/debug/test", (HttpContext context) =>
+{
+    var origin = context.Request.Headers.Origin.FirstOrDefault();
+    Console.WriteLine($"🧪 POST Test - Origin: {origin}");
+
+    return Results.Ok(new
+    {
+        message = "POST funcionando!",
+        origin = origin,
+        method = context.Request.Method,
+        timestamp = DateTime.UtcNow
+    });
+});
+
+// Health checks endpoint
+app.MapHealthChecks("/healthz");
+
 // Controllers
 app.MapControllers();
-
-// ⚠️ MIGRAÇÃO AUTOMÁTICA E SEED (PARA RENDER)
-try
-{
-    using (var scope = app.Services.CreateScope())
-    {
-        var context = scope.ServiceProvider.GetRequiredService<StockControlDbContext>();
-
-        Console.WriteLine("🔄 Executando migrações...");
-        await context.Database.MigrateAsync();
-        Console.WriteLine("✅ Migrações executadas com sucesso");
-
-        Console.WriteLine("🌱 Executando seed...");
-        await DatabaseSeeder.SeedAsync(context);
-        Console.WriteLine("✅ Seed executado com sucesso");
-    }
-}
-catch (Exception ex)
-{
-    Console.WriteLine($"❌ Erro durante migração/seed: {ex.Message}");
-    Console.WriteLine($"StackTrace: {ex.StackTrace}");
-}
 
 Console.WriteLine("=== ✅ APLICAÇÃO INICIADA COM SUCESSO ===");
 Console.WriteLine($"🌐 CORS: AllowAll policy ativa");

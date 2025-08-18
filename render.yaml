@@ -11,7 +11,6 @@ services:
     envVars:
       - key: ASPNETCORE_ENVIRONMENT
         value: Production
-      # Remover PORT ou usar 5000 como padrão
       - key: JWT_SECRET
         generateValue: true
       - key: FRONTEND_URL
