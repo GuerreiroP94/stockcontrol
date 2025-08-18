@@ -59,5 +59,23 @@ namespace PreSystem.StockControl.Application.Services
             var httpContext = _httpContextAccessor.HttpContext;
             return httpContext?.User?.Identity?.IsAuthenticated == true;
         }
+
+        // ADICIONAR APENAS ESTE MÉTODO
+        public string? GetCurrentUsername()
+        {
+            var httpContext = _httpContextAccessor.HttpContext;
+            if (httpContext?.User?.Identity?.IsAuthenticated == true)
+            {
+                // Tentar pegar o nome do claim "name" primeiro
+                var nameClaim = httpContext.User.FindFirst(ClaimTypes.Name);
+                if (nameClaim != null)
+                    return nameClaim.Value;
+
+                // Se não encontrar, usar o email como fallback
+                var emailClaim = httpContext.User.FindFirst(ClaimTypes.Email);
+                return emailClaim?.Value;
+            }
+            return "Sistema"; // Fallback para operações automáticas
+        }
     }
 }

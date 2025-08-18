@@ -7,5 +7,6 @@
         string? GetCurrentUserEmail();
         bool IsCurrentUserAdmin();
         bool IsAuthenticated();
+        string? GetCurrentUsername(); // <- ADICIONAR APENAS ESTA LINHA
     }
 }
