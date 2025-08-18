@@ -13,15 +13,51 @@ namespace PreSystem.StockControl.Application.Services
             _httpContextAccessor = httpContextAccessor;
         }
 
-        public string? GetCurrentUsername()
-        {
-            return _httpContextAccessor.HttpContext?.User?.Identity?.Name;
-        }
-
         public int? GetCurrentUserId()
         {
-            var userIdClaim = _httpContextAccessor.HttpContext?.User?.FindFirst(ClaimTypes.NameIdentifier);
-            return userIdClaim != null ? int.Parse(userIdClaim.Value) : null;
+            var httpContext = _httpContextAccessor.HttpContext;
+            if (httpContext?.User?.Identity?.IsAuthenticated == true)
+            {
+                var userIdClaim = httpContext.User.FindFirst(ClaimTypes.NameIdentifier);
+                if (userIdClaim != null && int.TryParse(userIdClaim.Value, out var userId))
+                {
+                    return userId;
+                }
+            }
+            return null;
+        }
+
+        public string? GetCurrentUserRole()
+        {
+            var httpContext = _httpContextAccessor.HttpContext;
+            if (httpContext?.User?.Identity?.IsAuthenticated == true)
+            {
+                var roleClaim = httpContext.User.FindFirst(ClaimTypes.Role);
+                return roleClaim?.Value;
+            }
+            return null;
+        }
+
+        public string? GetCurrentUserEmail()
+        {
+            var httpContext = _httpContextAccessor.HttpContext;
+            if (httpContext?.User?.Identity?.IsAuthenticated == true)
+            {
+                var emailClaim = httpContext.User.FindFirst(ClaimTypes.Email);
+                return emailClaim?.Value;
+            }
+            return null;
+        }
+
+        public bool IsCurrentUserAdmin()
+        {
+            return GetCurrentUserRole() == "admin";
+        }
+
+        public bool IsAuthenticated()
+        {
+            var httpContext = _httpContextAccessor.HttpContext;
+            return httpContext?.User?.Identity?.IsAuthenticated == true;
         }
     }
 }

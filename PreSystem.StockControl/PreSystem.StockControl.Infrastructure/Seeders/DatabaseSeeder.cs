@@ -73,6 +73,7 @@ namespace PreSystem.StockControl.Infrastructure.Seeders
             catch (Exception ex)
             {
                 Console.WriteLine($"❌ Erro durante seeding: {ex.Message}");
+                Console.WriteLine($"Stack trace: {ex.StackTrace}");
                 throw;
             }
         }

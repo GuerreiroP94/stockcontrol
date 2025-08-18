@@ -63,40 +63,42 @@ builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
     ["FrontendUrl"] = Environment.GetEnvironmentVariable("FRONTEND_URL") ?? "http://localhost:3000"
 });
 
-// Configuração do CORS - MAIS PERMISSIVA PARA DEBUG
+// Configuração do CORS - CORRIGIDA PARA RENDER
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowFrontend",
-        policy =>
-        {
-            var frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL");
-
-            // Lista de origens permitidas
-            var allowedOrigins = new List<string>();
-
-            // Adicionar URLs do ambiente
-            if (!string.IsNullOrEmpty(frontendUrl))
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        policy
+            .SetIsOriginAllowed(origin =>
             {
-                allowedOrigins.AddRange(frontendUrl.Split(','));
-            }
+                Console.WriteLine($"🌐 CORS Origin request: {origin}");
 
-            // Adicionar localhost para desenvolvimento
-            allowedOrigins.Add("http://localhost:3000");
-            allowedOrigins.Add("http://localhost:5173");
-            allowedOrigins.Add("http://localhost:5000");
-            allowedOrigins.Add("http://localhost:8080");
+                // Lista de origens permitidas
+                var allowedOrigins = new[]
+                {
+                    "https://stock-control-frontend.onrender.com",
+                    "http://localhost:3000",
+                    "http://localhost:5173",
+                    "http://localhost:8080"
+                };
 
-            // Adicionar URLs do Render
-            allowedOrigins.Add("https://stock-control-frontend.onrender.com");
+                // Verificar se a origem está na lista
+                var isAllowed = allowedOrigins.Contains(origin);
 
-            Console.WriteLine($"CORS configurado para: {string.Join(", ", allowedOrigins)}");
+                // Durante debug, também aceitar qualquer origem do Render
+                if (!isAllowed && origin?.Contains("onrender.com") == true)
+                {
+                    isAllowed = true;
+                    Console.WriteLine($"✅ Render origin aceito: {origin}");
+                }
 
-            // Configurar CORS corretamente
-            policy.WithOrigins(allowedOrigins.ToArray())
-                  .AllowAnyHeader()
-                  .AllowAnyMethod()
-                  .AllowCredentials();
-        });
+                Console.WriteLine($"🔍 Origin {origin} permitido: {isAllowed}");
+                return isAllowed;
+            })
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
+    });
 });
 
 // Adicionar DbContext
@@ -117,9 +119,13 @@ builder.Services.AddDbContext<StockControlDbContext>(options =>
 // Adicionar todas as dependências do projeto
 builder.Services.AddProjectDependencies(builder.Configuration);
 
-// Adicionar User Repository (que estava faltando)
+// Adicionar User Repository e Service
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IUserService, UserService>();
+
+// Context Service
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<IUserContextService, UserContextService>();
 
 // Serviços básicos
 builder.Services.AddControllers();
@@ -178,49 +184,103 @@ catch (Exception ex)
     // Não falhar a aplicação se as migrations falharem
 }
 
-// Middlewares
+// Middlewares - ORDEM IMPORTANTE!
+Console.WriteLine("🌐 Configurando CORS...");
 app.UseCors("AllowFrontend");
+
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.UseSwagger();
-app.UseSwaggerUI(c =>
+// Swagger
+if (app.Environment.IsDevelopment() || app.Environment.IsProduction())
 {
-    c.SwaggerEndpoint("/swagger/v1/swagger.json", "PreSystem.StockControl v1");
-    c.RoutePrefix = string.Empty;
+    app.UseSwagger();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "PreSystem.StockControl v1");
+        c.RoutePrefix = string.Empty;
+    });
+}
+
+// Endpoints principais
+app.MapGet("/", (HttpContext context) =>
+{
+    var origin = context.Request.Headers.Origin.FirstOrDefault();
+    Console.WriteLine($"🏠 Root endpoint acessado - Origin: {origin}");
+
+    return Results.Ok(new
+    {
+        message = "PreSystem Stock Control API",
+        status = "running",
+        timestamp = DateTime.UtcNow,
+        environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"),
+        port = Environment.GetEnvironmentVariable("PORT"),
+        frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL"),
+        corsOrigin = origin
+    });
 });
 
-// Endpoints de debug
-app.MapGet("/", () => new
+app.MapGet("/health", (HttpContext context) =>
 {
-    message = "PreSystem Stock Control API",
-    status = "running",
-    timestamp = DateTime.UtcNow,
-    environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"),
-    port = Environment.GetEnvironmentVariable("PORT"),
-    frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL")
-});
+    var origin = context.Request.Headers.Origin.FirstOrDefault();
+    Console.WriteLine($"❤️ Health check - Origin: {origin}");
 
-app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
+    return Results.Ok(new
+    {
+        status = "healthy",
+        timestamp = DateTime.UtcNow,
+        origin = origin
+    });
+});
 
 // Endpoint para debug CORS
-app.MapGet("/debug/cors", () => new
+app.MapGet("/debug/cors", (HttpContext context) =>
 {
-    allowedOrigins = new[] {
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "http://localhost:8080",
-        "https://stock-control-frontend.onrender.com",
-        Environment.GetEnvironmentVariable("FRONTEND_URL")
-    }.Where(x => !string.IsNullOrEmpty(x)),
-    corsEnabled = true,
-    timestamp = DateTime.UtcNow
+    var origin = context.Request.Headers.Origin.FirstOrDefault();
+    var userAgent = context.Request.Headers.UserAgent.FirstOrDefault();
+
+    Console.WriteLine($"🔍 Debug CORS - Origin: {origin}");
+    Console.WriteLine($"🔍 Debug CORS - User-Agent: {userAgent}");
+
+    return Results.Ok(new
+    {
+        message = "CORS Debug Info",
+        origin = origin,
+        userAgent = userAgent,
+        timestamp = DateTime.UtcNow,
+        requestHeaders = context.Request.Headers.ToDictionary(h => h.Key, h => h.Value.ToString()),
+        allowedOrigins = new[]
+        {
+            "https://stock-control-frontend.onrender.com",
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "http://localhost:8080"
+        }
+    });
+});
+
+// Endpoint para testar CORS específico
+app.MapPost("/debug/cors-test", (HttpContext context) =>
+{
+    var origin = context.Request.Headers.Origin.FirstOrDefault();
+
+    Console.WriteLine($"🧪 CORS Test POST - Origin: {origin}");
+
+    return Results.Ok(new
+    {
+        message = "CORS POST Test OK",
+        origin = origin,
+        timestamp = DateTime.UtcNow,
+        corsWorking = true
+    });
 });
 
 app.MapHealthChecks("/healthz");
 app.MapControllers();
 
 Console.WriteLine("=== APLICAÇÃO INICIADA COM SUCESSO ===");
-Console.WriteLine($"Swagger disponível em: http://localhost:{port}");
+Console.WriteLine($"🌐 CORS configurado para aceitar: https://stock-control-frontend.onrender.com");
+Console.WriteLine($"📊 Swagger disponível em: http://localhost:{port}");
+Console.WriteLine($"🔍 Debug CORS em: http://localhost:{port}/debug/cors");
 
 app.Run();
