@@ -11,8 +11,7 @@ services:
     envVars:
       - key: ASPNETCORE_ENVIRONMENT
         value: Production
-      - key: PORT
-        value: 10000
+      # Remover PORT ou usar 5000 como padrão
       - key: JWT_SECRET
         generateValue: true
       - key: FRONTEND_URL
@@ -41,7 +40,6 @@ services:
         value: https://stock-control-backend.onrender.com/api
 
 databases:
-  databases:
   - name: stock-control-db
     databaseName: stockcontroldb
     user: stockcontrol

@@ -9,7 +9,6 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
-using FluentValidation;
 using FluentValidation.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -17,10 +16,10 @@ var builder = WebApplication.CreateBuilder(args);
 Console.WriteLine("=== INICIANDO APLICAÇÃO ===");
 Console.WriteLine($"Environment: {builder.Environment.EnvironmentName}");
 
-// Configuração da porta para Render
+// ⚠️ CONFIGURAÇÃO CRUCIAL PARA RENDER
 var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
 builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
-Console.WriteLine($"Aplicação configurada para porta: {port}");
+Console.WriteLine($"✅ Aplicação configurada para porta: {port}");
 
 // Carregar variáveis de ambiente
 if (builder.Environment.IsDevelopment())
@@ -28,11 +27,11 @@ if (builder.Environment.IsDevelopment())
     try
     {
         DotNetEnv.Env.Load();
-        Console.WriteLine("Arquivo .env carregado");
+        Console.WriteLine("✅ Arquivo .env carregado");
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Arquivo .env não encontrado: {ex.Message}");
+        Console.WriteLine($"⚠️ Arquivo .env não encontrado: {ex.Message}");
     }
 }
 
@@ -51,6 +50,7 @@ if (!string.IsNullOrEmpty(connectionString))
                       $"SSL Mode=Require;Trust Server Certificate=true";
 
     builder.Configuration["ConnectionStrings:DefaultConnection"] = connectionString;
+    Console.WriteLine("✅ PostgreSQL connection string configurada");
 }
 
 // Adicionar as variáveis de ambiente à configuração
@@ -59,10 +59,10 @@ builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
     ["EmailSettings:SmtpUser"] = Environment.GetEnvironmentVariable("EMAIL_SMTP_USER"),
     ["EmailSettings:SmtpPassword"] = Environment.GetEnvironmentVariable("EMAIL_SMTP_PASSWORD"),
     ["EmailSettings:FromEmail"] = Environment.GetEnvironmentVariable("EMAIL_FROM"),
-    ["FrontendUrl"] = Environment.GetEnvironmentVariable("FRONTEND_URL") ?? "http://localhost:3000"
+    ["FrontendUrl"] = Environment.GetEnvironmentVariable("FRONTEND_URL") ?? "https://stock-control-frontend.onrender.com"
 });
 
-// CORS CONFIGURATION - SUPER PERMISSIVO PARA FUNCIONAR
+// ⚠️ CORS CONFIGURAÇÃO CRÍTICA PARA RENDER
 Console.WriteLine("🌐 Configurando CORS...");
 builder.Services.AddCors(options =>
 {
@@ -71,15 +71,19 @@ builder.Services.AddCors(options =>
         policy
             .SetIsOriginAllowed(origin =>
             {
-                Console.WriteLine($"🔍 CORS Origin: {origin}");
-                // Permitir todas as origens do Render por enquanto
+                Console.WriteLine($"🔍 CORS Origin checando: {origin}");
+
+                // Permitir origens vazias (para ferramentas)
                 if (string.IsNullOrEmpty(origin))
                 {
                     Console.WriteLine("✅ Origin vazio - permitido");
                     return true;
                 }
 
-                if (origin.Contains("onrender.com") || origin.Contains("localhost"))
+                // Permitir Render e localhost
+                if (origin.Contains("onrender.com") ||
+                    origin.Contains("localhost") ||
+                    origin.Contains("127.0.0.1"))
                 {
                     Console.WriteLine($"✅ Origin permitido: {origin}");
                     return true;
@@ -101,22 +105,20 @@ builder.Services.AddDbContext<StockControlDbContext>(options =>
     if (!string.IsNullOrEmpty(connStr))
     {
         options.UseNpgsql(connStr);
-        Console.WriteLine("✅ PostgreSQL configurado com sucesso");
+        Console.WriteLine("✅ PostgreSQL DbContext configurado");
     }
     else
     {
-        Console.WriteLine("⚠️ AVISO: Connection string não encontrada!");
+        Console.WriteLine("❌ ERRO: Connection string não encontrada!");
     }
 });
 
 // Adicionar todas as dependências do projeto
 builder.Services.AddProjectDependencies(builder.Configuration);
 
-// Adicionar User Repository e Service
+// Adicionar repositories e services
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IUserService, UserService>();
-
-// Adicionar HttpContextAccessor e UserContextService
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IUserContextService, UserContextService>();
 
@@ -125,107 +127,81 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Adicionar FluentValidation
+// FluentValidation
 builder.Services.AddFluentValidationAutoValidation();
 builder.Services.AddFluentValidationClientsideAdapters();
 
-// JWT
-var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET") ?? "chave-secreta-super-segura-para-producao-123456";
-var key = Encoding.ASCII.GetBytes(jwtSecret);
-Console.WriteLine($"🔐 JWT Secret configurado: {jwtSecret[..10]}...");
+// ⚠️ JWT CONFIGURAÇÃO
+var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET") ?? "chave-super-secreta-para-desenvolvimento";
+Console.WriteLine($"✅ JWT Secret configurado (length: {jwtSecret.Length})");
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
-        options.RequireHttpsMetadata = false;
-        options.SaveToken = true;
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(key),
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
             ValidateIssuer = false,
             ValidateAudience = false,
             ClockSkew = TimeSpan.Zero
         };
     });
 
-// Health checks
-builder.Services.AddHealthChecks();
-
 var app = builder.Build();
 
-// Aplicar migrations e seeding automaticamente
-try
+// ⚠️ CONFIGURAÇÃO DE MIDDLEWARE PARA RENDER
+Console.WriteLine("🔧 Configurando middleware...");
+
+// Swagger sempre ativado (para debug no Render)
+app.UseSwagger();
+app.UseSwaggerUI(c =>
 {
-    using (var scope = app.Services.CreateScope())
-    {
-        var dbContext = scope.ServiceProvider.GetRequiredService<StockControlDbContext>();
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Stock Control API v1");
+    c.RoutePrefix = "swagger";
+});
 
-        Console.WriteLine("📊 Aplicando migrations...");
-        dbContext.Database.Migrate();
-        Console.WriteLine("✅ Migrations aplicadas com sucesso!");
-
-        // EXECUTAR SEEDING
-        Console.WriteLine("🌱 Executando seeding...");
-        await DatabaseSeeder.SeedAsync(dbContext);
-        Console.WriteLine("✅ Seeding concluído!");
-    }
-}
-catch (Exception ex)
-{
-    Console.WriteLine($"❌ Erro ao aplicar migrations/seeding: {ex.Message}");
-    Console.WriteLine($"Stack trace: {ex.StackTrace}");
-}
-
-// MIDDLEWARES - ORDEM CRÍTICA!
-Console.WriteLine("🔧 Configurando middlewares...");
-
-// 1. CORS PRIMEIRO
+// ⚠️ CORS DEVE VIR ANTES DE AUTHENTICATION
 app.UseCors("AllowAll");
 
-// 2. Desenvolvimento
-if (app.Environment.IsDevelopment() || app.Environment.IsProduction())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI(c =>
-    {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "PreSystem.StockControl v1");
-        c.RoutePrefix = string.Empty;
-    });
-}
-
-// 3. Autenticação
+// Autenticação e autorização
 app.UseAuthentication();
 app.UseAuthorization();
 
-// ENDPOINTS DE DEBUG
-app.MapGet("/", (HttpContext context) =>
+// ⚠️ ENDPOINTS DE DEBUG ESSENCIAIS PARA RENDER
+app.MapGet("/", () =>
 {
-    var origin = context.Request.Headers.Origin.FirstOrDefault();
-    Console.WriteLine($"🏠 Root endpoint - Origin: {origin}");
-
     return Results.Ok(new
     {
-        message = "PreSystem Stock Control API - FUNCIONANDO!",
+        message = "PreSystem Stock Control API - FUNCIONANDO NO RENDER!",
         status = "running",
         timestamp = DateTime.UtcNow,
         environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"),
         port = Environment.GetEnvironmentVariable("PORT"),
-        origin = origin,
+        frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL"),
         corsEnabled = true
     });
 });
 
-app.MapGet("/health", (HttpContext context) =>
+app.MapGet("/health", () =>
 {
-    var origin = context.Request.Headers.Origin.FirstOrDefault();
-    Console.WriteLine($"❤️ Health check - Origin: {origin}");
-
+    Console.WriteLine("❤️ Health check executado");
     return Results.Ok(new
     {
         status = "healthy",
         timestamp = DateTime.UtcNow,
-        origin = origin,
+        service = "stock-control-backend"
+    });
+});
+
+// Endpoint para testar conectividade do frontend
+app.MapGet("/api/test", () =>
+{
+    Console.WriteLine("🧪 API Test endpoint chamado");
+    return Results.Ok(new
+    {
+        message = "API funcionando!",
+        timestamp = DateTime.UtcNow,
         cors = "enabled"
     });
 });
@@ -240,36 +216,41 @@ app.MapGet("/debug/cors", (HttpContext context) =>
 
     return Results.Ok(new
     {
-        message = "CORS Debug - Funcionando!",
+        message = "CORS Debug OK",
         origin = origin,
         allHeaders = headers,
-        timestamp = DateTime.UtcNow,
-        corsPolicy = "AllowAll",
-        status = "OK"
-    });
-});
-
-// Endpoint de teste POST
-app.MapPost("/debug/test", (HttpContext context) =>
-{
-    var origin = context.Request.Headers.Origin.FirstOrDefault();
-    Console.WriteLine($"🧪 POST Test - Origin: {origin}");
-
-    return Results.Ok(new
-    {
-        message = "POST funcionando!",
-        origin = origin,
-        method = context.Request.Method,
         timestamp = DateTime.UtcNow
     });
 });
 
-app.MapHealthChecks("/healthz");
+// Controllers
 app.MapControllers();
 
+// ⚠️ MIGRAÇÃO AUTOMÁTICA E SEED (PARA RENDER)
+try
+{
+    using (var scope = app.Services.CreateScope())
+    {
+        var context = scope.ServiceProvider.GetRequiredService<StockControlDbContext>();
+
+        Console.WriteLine("🔄 Executando migrações...");
+        await context.Database.MigrateAsync();
+        Console.WriteLine("✅ Migrações executadas com sucesso");
+
+        Console.WriteLine("🌱 Executando seed...");
+        await DatabaseSeeder.SeedAsync(context);
+        Console.WriteLine("✅ Seed executado com sucesso");
+    }
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"❌ Erro durante migração/seed: {ex.Message}");
+    Console.WriteLine($"StackTrace: {ex.StackTrace}");
+}
+
 Console.WriteLine("=== ✅ APLICAÇÃO INICIADA COM SUCESSO ===");
-Console.WriteLine($"🌐 CORS configurado como AllowAll");
-Console.WriteLine($"🔗 Frontend URL esperada: https://stock-control-frontend.onrender.com");
-Console.WriteLine($"📊 Swagger: https://stock-control-backend.onrender.com");
+Console.WriteLine($"🌐 CORS: AllowAll policy ativa");
+Console.WriteLine($"🔗 Frontend URL: {Environment.GetEnvironmentVariable("FRONTEND_URL")}");
+Console.WriteLine($"📊 Swagger disponível em: /swagger");
 
 app.Run();
