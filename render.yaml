@@ -44,5 +44,5 @@ databases:
   - name: stock-control-db
     databaseName: stockcontroldb
     user: stockcontrol
-    plan: starter
+    plan: free
     region: oregon
