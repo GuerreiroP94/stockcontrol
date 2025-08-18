@@ -1,0 +1,51 @@
+services:
+  # Backend API
+  - type: web
+    name: stock-control-backend
+    env: docker
+    dockerfilePath: ./PreSystem.StockControl/Dockerfile
+    dockerContext: ./PreSystem.StockControl
+    plan: starter
+    region: oregon
+    branch: main
+    healthCheckPath: /health
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: PORT
+        value: 10000
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FRONTEND_URL
+        value: https://stock-control-frontend.onrender.com
+      - key: DATABASE_URL
+        fromDatabase:
+          name: stock-control-db
+          property: connectionString
+      - key: EMAIL_SMTP_USER
+        sync: false  # Você configurará manualmente
+      - key: EMAIL_SMTP_PASSWORD
+        sync: false  # Você configurará manualmente
+      - key: EMAIL_FROM
+        sync: false  # Você configurará manualmente
+
+  # Frontend React
+  - type: web
+    name: stock-control-frontend
+    env: docker
+    dockerfilePath: ./stock-control-frontend/Dockerfile
+    dockerContext: ./stock-control-frontend
+    plan: starter
+    region: oregon
+    branch: main
+    envVars:
+      - key: REACT_APP_API_URL
+        value: https://stock-control-backend.onrender.com/api
+
+# Database PostgreSQL
+databases:
+  - name: stock-control-db
+    databaseName: stockcontroldb
+    user: stockcontrol
+    plan: starter
+    region: oregon
