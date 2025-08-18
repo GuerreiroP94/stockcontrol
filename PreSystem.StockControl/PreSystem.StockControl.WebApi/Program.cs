@@ -3,6 +3,7 @@ using PreSystem.StockControl.Application.Services;
 using PreSystem.StockControl.Domain.Interfaces.Repositories;
 using PreSystem.StockControl.Infrastructure.Repositories;
 using PreSystem.StockControl.Infrastructure.Persistence;
+using PreSystem.StockControl.Infrastructure.Seeders;
 using PreSystem.StockControl.WebApi.Configurations;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -16,7 +17,7 @@ var builder = WebApplication.CreateBuilder(args);
 Console.WriteLine("=== INICIANDO APLICAÇÃO ===");
 Console.WriteLine($"Environment: {builder.Environment.EnvironmentName}");
 
-// Configuração da porta para Railway
+// Configuração da porta para Render
 var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
 builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 Console.WriteLine($"Aplicação configurada para porta: {port}");
@@ -39,17 +40,17 @@ if (builder.Environment.IsDevelopment())
 var connectionString = Environment.GetEnvironmentVariable("DATABASE_URL");
 if (!string.IsNullOrEmpty(connectionString))
 {
-    // Converter DATABASE_URL do Railway para connection string do .NET
+    // Converter DATABASE_URL do Render para connection string do .NET
     var databaseUri = new Uri(connectionString);
     var userInfo = databaseUri.UserInfo.Split(':');
-    
+
     connectionString = $"Host={databaseUri.Host};" +
                       $"Port={databaseUri.Port};" +
                       $"Database={databaseUri.LocalPath.TrimStart('/')};" +
                       $"Username={userInfo[0]};" +
                       $"Password={userInfo[1]};" +
                       $"SSL Mode=Require;Trust Server Certificate=true";
-    
+
     builder.Configuration["ConnectionStrings:DefaultConnection"] = connectionString;
 }
 
@@ -62,28 +63,34 @@ builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
     ["FrontendUrl"] = Environment.GetEnvironmentVariable("FRONTEND_URL") ?? "http://localhost:3000"
 });
 
-// Configuração do CORS - CORRIGIDA
+// Configuração do CORS - MAIS PERMISSIVA PARA DEBUG
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend",
         policy =>
         {
             var frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL");
-            
+
             // Lista de origens permitidas
             var allowedOrigins = new List<string>();
-            
+
             // Adicionar URLs do ambiente
             if (!string.IsNullOrEmpty(frontendUrl))
             {
                 allowedOrigins.AddRange(frontendUrl.Split(','));
             }
-            
+
             // Adicionar localhost para desenvolvimento
             allowedOrigins.Add("http://localhost:3000");
             allowedOrigins.Add("http://localhost:5173");
             allowedOrigins.Add("http://localhost:5000");
-            
+            allowedOrigins.Add("http://localhost:8080");
+
+            // Adicionar URLs do Render
+            allowedOrigins.Add("https://stock-control-frontend.onrender.com");
+
+            Console.WriteLine($"CORS configurado para: {string.Join(", ", allowedOrigins)}");
+
             // Configurar CORS corretamente
             policy.WithOrigins(allowedOrigins.ToArray())
                   .AllowAnyHeader()
@@ -147,20 +154,27 @@ builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
-// Aplicar migrations automaticamente (com tratamento de erro melhorado)
+// Aplicar migrations e seeding automaticamente
 try
 {
     using (var scope = app.Services.CreateScope())
     {
         var dbContext = scope.ServiceProvider.GetRequiredService<StockControlDbContext>();
+
         Console.WriteLine("Aplicando migrations...");
         dbContext.Database.Migrate();
         Console.WriteLine("Migrations aplicadas com sucesso!");
+
+        // EXECUTAR SEEDING
+        Console.WriteLine("Executando seeding...");
+        await DatabaseSeeder.SeedAsync(dbContext);
+        Console.WriteLine("Seeding concluído!");
     }
 }
 catch (Exception ex)
 {
-    Console.WriteLine($"Erro ao aplicar migrations: {ex.Message}");
+    Console.WriteLine($"Erro ao aplicar migrations/seeding: {ex.Message}");
+    Console.WriteLine($"Stack trace: {ex.StackTrace}");
     // Não falhar a aplicação se as migrations falharem
 }
 
@@ -176,16 +190,37 @@ app.UseSwaggerUI(c =>
     c.RoutePrefix = string.Empty;
 });
 
-// Endpoints
+// Endpoints de debug
 app.MapGet("/", () => new
 {
     message = "PreSystem Stock Control API",
     status = "running",
-    timestamp = DateTime.UtcNow
+    timestamp = DateTime.UtcNow,
+    environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"),
+    port = Environment.GetEnvironmentVariable("PORT"),
+    frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL")
 });
 
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
+
+// Endpoint para debug CORS
+app.MapGet("/debug/cors", () => new
+{
+    allowedOrigins = new[] {
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:8080",
+        "https://stock-control-frontend.onrender.com",
+        Environment.GetEnvironmentVariable("FRONTEND_URL")
+    }.Where(x => !string.IsNullOrEmpty(x)),
+    corsEnabled = true,
+    timestamp = DateTime.UtcNow
+});
+
 app.MapHealthChecks("/healthz");
 app.MapControllers();
+
+Console.WriteLine("=== APLICAÇÃO INICIADA COM SUCESSO ===");
+Console.WriteLine($"Swagger disponível em: http://localhost:{port}");
 
 app.Run();

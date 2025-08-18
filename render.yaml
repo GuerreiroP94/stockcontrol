@@ -41,6 +41,7 @@ services:
         value: https://stock-control-backend.onrender.com/api
 
 databases:
+  databases:
   - name: stock-control-db
     databaseName: stockcontroldb
     user: stockcontrol
