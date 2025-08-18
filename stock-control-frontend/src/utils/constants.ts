@@ -2,26 +2,20 @@
 
 // Função para determinar a URL base da API
 const getApiBaseUrl = (): string => {
-  // 1. Primeiro, tenta usar a variável de ambiente
-  if (process.env.REACT_APP_API_URL) {
-    console.log('🌐 Usando REACT_APP_API_URL:', process.env.REACT_APP_API_URL);
-    return process.env.REACT_APP_API_URL;
-  }
-
-  // 2. Se estiver em desenvolvimento local
-  if (process.env.NODE_ENV === 'development') {
+  // SOLUÇÃO TEMPORÁRIA: Usar URL hardcoded para Render
+  const renderUrl = 'https://stock-control-backend.onrender.com/api';
+  
+  // Só usar localhost se estiver rodando localmente (window.location contém localhost)
+  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
     const localUrl = 'http://localhost:5000/api';
-    console.log('🏠 Desenvolvimento local, usando:', localUrl);
+    console.log('🏠 Desenvolvimento local:', localUrl);
     return localUrl;
   }
-
-  // 3. Se estiver em produção, usar URL do Render
-  const prodUrl = 'https://stock-control-backend.onrender.com/api';
-  console.log('🚀 Produção, usando:', prodUrl);
-  return prodUrl;
+  
+  console.log('🚀 Produção Render:', renderUrl);
+  return renderUrl;
 };
 
-// Exportar a URL da API
 export const API_BASE_URL = getApiBaseUrl();
 
 // PAGINATION - ESTA ERA A CONSTANTE QUE ESTAVA FALTANDO!
