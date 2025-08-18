@@ -9,20 +9,21 @@ RUN npm run build
 # Production stage
 FROM nginx:alpine
 
-# Remove default nginx configuration
+# Remove configuração padrão do nginx
 RUN rm /etc/nginx/conf.d/default.conf
+RUN rm /etc/nginx/nginx.conf
 
-# Copy built React app
+# Copiar arquivos de configuração personalizados
+COPY nginx.conf /etc/nginx/nginx.conf
+COPY default.conf /etc/nginx/conf.d/default.conf
+
+# Copiar arquivos da build
 COPY --from=build /app/build /usr/share/nginx/html
 
-# Copy custom nginx configuration (complete config)
-COPY nginx.conf /etc/nginx/nginx.conf
+# Criar diretórios necessários
+RUN mkdir -p /var/log/nginx
+RUN mkdir -p /var/run
 
-# Expose port 80
 EXPOSE 80
 
-# Test nginx configuration before starting
-RUN nginx -t
-
-# Start nginx
 CMD ["nginx", "-g", "daemon off;"]
