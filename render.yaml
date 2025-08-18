@@ -1,5 +1,4 @@
 services:
-  # Backend API
   - type: web
     name: stock-control-backend
     env: docker
@@ -23,13 +22,12 @@ services:
           name: stock-control-db
           property: connectionString
       - key: EMAIL_SMTP_USER
-        sync: false  # Você configurará manualmente
+        sync: false
       - key: EMAIL_SMTP_PASSWORD
-        sync: false  # Você configurará manualmente
+        sync: false
       - key: EMAIL_FROM
-        sync: false  # Você configurará manualmente
+        sync: false
 
-  # Frontend React
   - type: web
     name: stock-control-frontend
     env: docker
@@ -42,7 +40,6 @@ services:
       - key: REACT_APP_API_URL
         value: https://stock-control-backend.onrender.com/api
 
-# Database PostgreSQL
 databases:
   - name: stock-control-db
     databaseName: stockcontroldb
