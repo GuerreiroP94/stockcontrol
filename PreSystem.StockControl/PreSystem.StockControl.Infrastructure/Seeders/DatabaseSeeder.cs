@@ -26,7 +26,8 @@ namespace PreSystem.StockControl.Infrastructure.Seeders
                         Email = "admin@stockcontrol.com",
                         PasswordHash = BCrypt.Net.BCrypt.HashPassword("admin123"),
                         Role = "admin",
-                        CreatedAt = DateTime.UtcNow
+                        // ✅ CORREÇÃO: Usar DateTime.Now ao invés de DateTime.UtcNow
+                        CreatedAt = DateTime.Now
                     };
 
                     context.Users.Add(adminUser);
@@ -56,7 +57,8 @@ namespace PreSystem.StockControl.Infrastructure.Seeders
                         Email = "operador@stockcontrol.com",
                         PasswordHash = BCrypt.Net.BCrypt.HashPassword("operador123"),
                         Role = "operator",
-                        CreatedAt = DateTime.UtcNow
+                        // ✅ CORREÇÃO: Usar DateTime.Now ao invés de DateTime.UtcNow
+                        CreatedAt = DateTime.Now
                     };
 
                     context.Users.Add(operatorUser);
@@ -66,6 +68,10 @@ namespace PreSystem.StockControl.Infrastructure.Seeders
                     Console.WriteLine($"   Email: {operatorUser.Email}");
                     Console.WriteLine($"   Senha: operador123");
                     Console.WriteLine($"   Role: {operatorUser.Role}");
+                }
+                else
+                {
+                    Console.WriteLine("ℹ️ Usuário operador já existe no banco.");
                 }
 
                 Console.WriteLine("=== SEEDING CONCLUÍDO ===");
