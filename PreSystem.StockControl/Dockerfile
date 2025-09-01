@@ -2,7 +2,7 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build-env
 WORKDIR /app
 
-# Copy solution and project files (ajustar caminhos)
+# Copy solution and project files
 COPY *.sln ./
 COPY PreSystem.StockControl.WebApi/*.csproj ./PreSystem.StockControl.WebApi/
 COPY PreSystem.StockControl.Application/*.csproj ./PreSystem.StockControl.Application/
@@ -23,12 +23,11 @@ FROM mcr.microsoft.com/dotnet/aspnet:8.0
 WORKDIR /app
 COPY --from=build-env /app/out .
 
-# Railway specific
+# ✅ A configuração de porta é feita no Program.cs, não no Dockerfile
 ENV ASPNETCORE_ENVIRONMENT=Production
-ENV ASPNETCORE_URLS=http://0.0.0.0:$PORT
 
-# Health check
+# Health check (opcional)
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:$PORT/health || exit 1
+  CMD curl -f http://localhost:10000/health || exit 1
 
 ENTRYPOINT ["dotnet", "PreSystem.StockControl.WebApi.dll"]
