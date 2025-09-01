@@ -36,22 +36,84 @@ if (builder.Environment.IsDevelopment())
     }
 }
 
-// Configurar connection string do PostgreSQL
+// ⚠️ CORREÇÃO CRÍTICA - DATABASE CONNECTION STRING
 var connectionString = Environment.GetEnvironmentVariable("DATABASE_URL");
+Console.WriteLine($"🔍 DATABASE_URL encontrada: {!string.IsNullOrEmpty(connectionString)}");
+
 if (!string.IsNullOrEmpty(connectionString))
 {
-    var databaseUri = new Uri(connectionString);
-    var userInfo = databaseUri.UserInfo.Split(':');
+    try
+    {
+        Console.WriteLine($"🔍 DATABASE_URL raw: {connectionString.Substring(0, Math.Min(50, connectionString.Length))}...");
 
-    connectionString = $"Host={databaseUri.Host};" +
-                      $"Port={databaseUri.Port};" +
-                      $"Database={databaseUri.LocalPath.TrimStart('/')};" +
-                      $"Username={userInfo[0]};" +
-                      $"Password={userInfo[1]};" +
-                      $"SSL Mode=Require;Trust Server Certificate=true";
+        var databaseUri = new Uri(connectionString);
+        var userInfo = databaseUri.UserInfo?.Split(':');
 
-    builder.Configuration["ConnectionStrings:DefaultConnection"] = connectionString;
-    Console.WriteLine("✅ PostgreSQL connection string configurada");
+        // Validações mais robustas
+        if (userInfo == null || userInfo.Length != 2)
+        {
+            throw new InvalidOperationException("DATABASE_URL deve conter username:password");
+        }
+
+        var host = databaseUri.Host;
+        var port_db = databaseUri.Port > 0 ? databaseUri.Port : 5432; // Default PostgreSQL port
+        var database = databaseUri.LocalPath.TrimStart('/');
+        var username = userInfo[0];
+        var password = userInfo[1];
+
+        // Log para debug (sem mostrar senha completa)
+        Console.WriteLine($"🔍 Parsed - Host: {host}, Port: {port_db}, Database: {database}, Username: {username}");
+
+        // Validar componentes
+        if (string.IsNullOrEmpty(host)) throw new InvalidOperationException("Host não encontrado na DATABASE_URL");
+        if (string.IsNullOrEmpty(database)) throw new InvalidOperationException("Database não encontrado na DATABASE_URL");
+        if (string.IsNullOrEmpty(username)) throw new InvalidOperationException("Username não encontrado na DATABASE_URL");
+        if (string.IsNullOrEmpty(password)) throw new InvalidOperationException("Password não encontrado na DATABASE_URL");
+
+        // Construir connection string mais robusta
+        connectionString = $"Host={host};" +
+                          $"Port={port_db};" +
+                          $"Database={database};" +
+                          $"Username={username};" +
+                          $"Password={password};" +
+                          $"SSL Mode=Require;" +
+                          $"Trust Server Certificate=true;" +
+                          $"Include Error Detail=true";
+
+        builder.Configuration["ConnectionStrings:DefaultConnection"] = connectionString;
+        Console.WriteLine("✅ PostgreSQL connection string configurada");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"❌ Erro ao processar DATABASE_URL: {ex.Message}");
+        Console.WriteLine($"DATABASE_URL format esperado: postgres://username:password@host:port/database");
+
+        // Fallback para connection string local (apenas em development)
+        if (builder.Environment.IsDevelopment())
+        {
+            Console.WriteLine("⚠️ Usando connection string local para desenvolvimento");
+            builder.Configuration["ConnectionStrings:DefaultConnection"] =
+                "Host=localhost;Port=5432;Database=PreSystemDB;Username=postgres;Password=123456";
+        }
+        else
+        {
+            throw; // Re-throw em production
+        }
+    }
+}
+else
+{
+    Console.WriteLine("⚠️ DATABASE_URL não encontrada nas variáveis de ambiente");
+
+    // Em desenvolvimento, usar connection string do appsettings.json
+    if (builder.Environment.IsDevelopment())
+    {
+        Console.WriteLine("ℹ️ Usando connection string do appsettings.json");
+    }
+    else
+    {
+        throw new InvalidOperationException("DATABASE_URL é obrigatória em produção");
+    }
 }
 
 // Adicionar as variáveis de ambiente à configuração
@@ -166,7 +228,7 @@ app.UseSwaggerUI(c =>
     c.RoutePrefix = "swagger";
 });
 
-// ✅ CORS SIMPLIFICADO E CORRETO - ÚNICA MUDANÇA NECESSÁRIA
+// ✅ CORS SIMPLIFICADO E CORRETO
 app.UseCors("AllowAll");
 
 // ✅ MIDDLEWARE APENAS PARA DEBUG (opcional - não interfere no CORS)
@@ -253,6 +315,40 @@ app.MapPost("/debug/login-test", (HttpContext context) =>
         timestamp = DateTime.UtcNow,
         note = "Se você está vendo isso, CORS está funcionando para POST"
     });
+});
+
+// ✅ NOVO ENDPOINT - Teste de conectividade com database
+app.MapGet("/debug/database", async () =>
+{
+    try
+    {
+        using var scope = app.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<StockControlDbContext>();
+
+        // Testa conexão simples
+        await context.Database.CanConnectAsync();
+
+        Console.WriteLine("✅ Database connection test OK");
+
+        return Results.Ok(new
+        {
+            message = "Database connection OK!",
+            timestamp = DateTime.UtcNow,
+            status = "connected"
+        });
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"❌ Database connection test failed: {ex.Message}");
+
+        return Results.Json(new
+        {
+            message = "Database connection FAILED",
+            error = ex.Message,
+            timestamp = DateTime.UtcNow,
+            status = "failed"
+        }, statusCode: 500);
+    }
 });
 
 // Health checks endpoint
