@@ -60,11 +60,22 @@ builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
     ["EmailSettings:SmtpUser"] = Environment.GetEnvironmentVariable("EMAIL_SMTP_USER"),
     ["EmailSettings:SmtpPassword"] = Environment.GetEnvironmentVariable("EMAIL_SMTP_PASSWORD"),
     ["EmailSettings:FromEmail"] = Environment.GetEnvironmentVariable("EMAIL_FROM"),
-    ["FrontendUrl"] = Environment.GetEnvironmentVariable("FRONTEND_URL") ?? "https://stock-control-frontend.onrender.com"
+    ["FrontendUrl"] = Environment.GetEnvironmentVariable("FRONTEND_URL") ??
+        "https://stock-control-frontend.onrender.com"
 });
 
-// ⚠️ REMOVIDO: CORS tradicional (que estava causando problemas)
-Console.WriteLine("🌐 CORS será configurado como middleware personalizado...");
+// ⚠️ CORS CONFIGURATION - FUNCIONAL PARA RENDER
+Console.WriteLine("🌐 Configurando CORS...");
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", policy =>
+    {
+        policy
+            .AllowAnyOrigin()
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    });
+});
 
 // Adicionar DbContext
 builder.Services.AddDbContext<StockControlDbContext>(options =>
@@ -100,7 +111,8 @@ builder.Services.AddFluentValidationAutoValidation();
 builder.Services.AddFluentValidationClientsideAdapters();
 
 // ⚠️ JWT CONFIGURAÇÃO CORRIGIDA
-var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET") ?? "chave-super-secreta-para-desenvolvimento";
+var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET") ??
+    "chave-super-secreta-para-desenvolvimento";
 Console.WriteLine($"✅ JWT Secret configurado (length: {jwtSecret.Length})");
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -154,24 +166,17 @@ app.UseSwaggerUI(c =>
     c.RoutePrefix = "swagger";
 });
 
-// ⚠️ 🚀 CORS NUCLEAR - SOLUÇÃO DEFINITIVA 🚀
+// ✅ CORS SIMPLIFICADO E CORRETO - ÚNICA MUDANÇA NECESSÁRIA
+app.UseCors("AllowAll");
+
+// ✅ MIDDLEWARE APENAS PARA DEBUG (opcional - não interfere no CORS)
 app.Use(async (context, next) =>
 {
-    // Adicionar headers CORS para TODAS as requisições
-    context.Response.Headers["Access-Control-Allow-Origin"] = "*";
-    context.Response.Headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS";
-    context.Response.Headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, Origin, Accept, X-Requested-With";
-    context.Response.Headers["Access-Control-Max-Age"] = "86400";
-
-    // Se for OPTIONS, retorna 200 direto
+    // Log apenas para debug - NÃO manipula a response
     if (context.Request.Method == "OPTIONS")
     {
-        Console.WriteLine($"🔧 OPTIONS request para: {context.Request.Path}");
-        context.Response.StatusCode = 200;
-        await context.Response.WriteAsync("");
-        return;
+        Console.WriteLine($"🔧 CORS Preflight para: {context.Request.Path} - Origin: {context.Request.Headers.Origin}");
     }
-
     await next();
 });
 
@@ -234,18 +239,19 @@ app.MapGet("/debug/cors", (HttpContext context) =>
     });
 });
 
-// Endpoint de teste POST
-app.MapPost("/debug/test", (HttpContext context) =>
+// ✅ NOVO ENDPOINT - Teste específico POST para debug CORS
+app.MapPost("/debug/login-test", (HttpContext context) =>
 {
     var origin = context.Request.Headers.Origin.FirstOrDefault();
-    Console.WriteLine($"🧪 POST Test - Origin: {origin}");
+    Console.WriteLine($"🧪 POST Login Test - Origin: {origin}");
 
     return Results.Ok(new
     {
-        message = "POST funcionando!",
+        message = "POST Login Test OK - CORS funcionando!",
         origin = origin,
         method = context.Request.Method,
-        timestamp = DateTime.UtcNow
+        timestamp = DateTime.UtcNow,
+        note = "Se você está vendo isso, CORS está funcionando para POST"
     });
 });
 
@@ -256,7 +262,7 @@ app.MapHealthChecks("/healthz");
 app.MapControllers();
 
 Console.WriteLine("=== ✅ APLICAÇÃO INICIADA COM SUCESSO ===");
-Console.WriteLine($"🌐 CORS: Middleware nuclear ativo");
+Console.WriteLine($"🌐 CORS: AllowAll policy ativa");
 Console.WriteLine($"🔗 Frontend URL: {Environment.GetEnvironmentVariable("FRONTEND_URL")}");
 Console.WriteLine($"📊 Swagger disponível em: /swagger");
 
