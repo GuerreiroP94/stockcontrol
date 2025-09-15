@@ -1,6 +1,6 @@
 // stock-control-frontend/src/components/common/ConfirmModal.tsx
 import React from 'react';
-import { AlertTriangle, Loader2 } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import BaseModal from './BaseModal';
 
 interface ConfirmModalProps {
@@ -12,7 +12,9 @@ interface ConfirmModalProps {
   confirmText?: string;
   cancelText?: string;
   type?: 'danger' | 'warning' | 'info';
-  loading?: boolean; // ← NOVO: Adicionar prop loading
+  // ✅ TEMPORÁRIO: Aceitar estas props para evitar erro de build
+  loading?: boolean;
+  isLoading?: boolean;
 }
 
 const ConfirmModal: React.FC<ConfirmModalProps> = ({
@@ -24,7 +26,8 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
   confirmText = 'Confirmar',
   cancelText = 'Cancelar',
   type = 'warning',
-  loading = false, // ← NOVO: Default false
+  loading = false,
+  isLoading = false, // ✅ ACEITAR TEMPORARIAMENTE
 }) => {
   const getIconColor = () => {
     switch (type) {
@@ -44,6 +47,9 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
     }
   };
 
+  // ✅ Usar qualquer uma das props de loading
+  const isLoadingState = loading || isLoading;
+
   return (
     <BaseModal isOpen={isOpen} onClose={onClose} title={title} size="sm">
       <div className="p-6">
@@ -61,24 +67,17 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
         <div className="flex justify-end gap-3 mt-6">
           <button
             onClick={onClose}
-            disabled={loading} // ← NOVO: Desabilitar quando loading
+            disabled={isLoadingState}
             className="px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {cancelText}
           </button>
           <button
             onClick={onConfirm}
-            disabled={loading} // ← NOVO: Desabilitar quando loading
-            className={`flex items-center gap-2 px-4 py-2 text-white rounded-lg focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${getConfirmButtonStyle()}`}
+            disabled={isLoadingState}
+            className={`px-4 py-2 text-white rounded-lg focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${getConfirmButtonStyle()}`}
           >
-            {loading ? ( // ← NOVO: Mostrar loading
-              <>
-                <Loader2 className="animate-spin" size={16} />
-                Processando...
-              </>
-            ) : (
-              confirmText
-            )}
+            {isLoadingState ? 'Processando...' : confirmText}
           </button>
         </div>
       </div>
