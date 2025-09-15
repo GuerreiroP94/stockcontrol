@@ -58,17 +58,18 @@ export const useGroupHierarchy = () => {
     return filtered;
   };
 
-  // ✅ CORRIGIDO: addGroup com melhor tratamento de erro e reload
   const addGroup = async (name: string): Promise<GroupItem> => {
     try {
       const result = await groupHierarchyService.createGroup(name);
       
       if (result.success && result.item) {
-        // ✅ Atualizar estado local imediatamente
+        // Atualizar estado local imediatamente
         setGroups(prevGroups => [...prevGroups, result.item!]);
         
-        // ✅ Recarregar hierarquia completa para garantir consistência
-        await loadFullHierarchy();
+        // Recarregar hierarquia completa para garantir consistência
+        setTimeout(() => {
+          loadFullHierarchy();
+        }, 100);
         
         return result.item;
       } else {
@@ -77,7 +78,7 @@ export const useGroupHierarchy = () => {
     } catch (error: any) {
       console.error('Erro ao criar grupo:', error);
       
-      // ✅ Melhor tratamento de mensagens de erro
+      // Melhor tratamento de mensagens de erro
       if (error?.response?.status === 403) {
         throw new Error('Acesso negado. Apenas administradores podem criar grupos.');
       } else if (error?.response?.status === 400) {
@@ -93,18 +94,17 @@ export const useGroupHierarchy = () => {
     }
   };
 
-  // ✅ CORRIGIDO: addDevice com reload
   const addDevice = async (name: string, groupId: number): Promise<GroupItem> => {
     try {
       const result = await groupHierarchyService.createDevice(groupId, name);
       
       if (result.success && result.item) {
-        // ✅ Atualizar estado local imediatamente
         const newDevice = { ...result.item, groupId };
         setDevices(prevDevices => [...prevDevices, newDevice]);
         
-        // ✅ Recarregar hierarquia completa
-        await loadFullHierarchy();
+        setTimeout(() => {
+          loadFullHierarchy();
+        }, 100);
         
         return newDevice;
       } else {
@@ -126,18 +126,17 @@ export const useGroupHierarchy = () => {
     }
   };
 
-  // ✅ CORRIGIDO: addValue com reload
   const addValue = async (name: string, groupId: number, deviceId: number): Promise<GroupItem> => {
     try {
       const result = await groupHierarchyService.createValue(deviceId, name);
       
       if (result.success && result.item) {
-        // ✅ Atualizar estado local imediatamente
         const newValue = { ...result.item, groupId, deviceId };
         setValues(prevValues => [...prevValues, newValue]);
         
-        // ✅ Recarregar hierarquia completa
-        await loadFullHierarchy();
+        setTimeout(() => {
+          loadFullHierarchy();
+        }, 100);
         
         return newValue;
       } else {
@@ -159,18 +158,17 @@ export const useGroupHierarchy = () => {
     }
   };
 
-  // ✅ CORRIGIDO: addPackage com reload
   const addPackage = async (name: string, groupId: number, deviceId: number, valueId: number): Promise<GroupItem> => {
     try {
       const result = await groupHierarchyService.createPackage(valueId, name);
       
       if (result.success && result.item) {
-        // ✅ Atualizar estado local imediatamente
         const newPackage = { ...result.item, groupId, deviceId, valueId };
         setPackages(prevPackages => [...prevPackages, newPackage]);
         
-        // ✅ Recarregar hierarquia completa
-        await loadFullHierarchy();
+        setTimeout(() => {
+          loadFullHierarchy();
+        }, 100);
         
         return newPackage;
       } else {
@@ -192,7 +190,6 @@ export const useGroupHierarchy = () => {
     }
   };
 
-  // ✅ CORRIGIDO: updateItem com reload
   const updateItem = async (type: 'group' | 'device' | 'value' | 'package', id: number, name: string): Promise<void> => {
     try {
       let result;
@@ -225,8 +222,10 @@ export const useGroupHierarchy = () => {
       }
 
       if (result?.success) {
-        // ✅ Recarregar hierarquia completa após atualização
-        await loadFullHierarchy();
+        // Recarregar hierarquia completa após atualização
+        setTimeout(() => {
+          loadFullHierarchy();
+        }, 100);
       } else {
         throw new Error(result?.message || `Erro ao atualizar ${type}`);
       }
@@ -246,7 +245,6 @@ export const useGroupHierarchy = () => {
     }
   };
 
-  // ✅ CORRIGIDO: deleteItem com reload e limpeza de dependências
   const deleteItem = async (type: 'group' | 'device' | 'value' | 'package', id: number): Promise<void> => {
     try {
       let result;
@@ -256,7 +254,7 @@ export const useGroupHierarchy = () => {
           result = await groupHierarchyService.deleteGroup(id);
           if (result.success) {
             setGroups(groups.filter(g => g.id !== id));
-            // ✅ Remove items dependentes
+            // Remove items dependentes
             setDevices(devices.filter(d => d.groupId !== id));
             setValues(values.filter(v => v.groupId !== id));
             setPackages(packages.filter(p => p.groupId !== id));
@@ -266,7 +264,7 @@ export const useGroupHierarchy = () => {
           result = await groupHierarchyService.deleteDevice(id);
           if (result.success) {
             setDevices(devices.filter(d => d.id !== id));
-            // ✅ Remove items dependentes
+            // Remove items dependentes
             setValues(values.filter(v => v.deviceId !== id));
             setPackages(packages.filter(p => p.deviceId !== id));
           }
@@ -275,7 +273,7 @@ export const useGroupHierarchy = () => {
           result = await groupHierarchyService.deleteValue(id);
           if (result.success) {
             setValues(values.filter(v => v.id !== id));
-            // ✅ Remove items dependentes
+            // Remove items dependentes
             setPackages(packages.filter(p => p.valueId !== id));
           }
           break;
@@ -288,8 +286,10 @@ export const useGroupHierarchy = () => {
       }
 
       if (result?.success) {
-        // ✅ Recarregar hierarquia completa após exclusão
-        await loadFullHierarchy();
+        // Recarregar hierarquia completa após exclusão
+        setTimeout(() => {
+          loadFullHierarchy();
+        }, 100);
       } else {
         throw new Error(result?.message || `Erro ao excluir ${type}`);
       }

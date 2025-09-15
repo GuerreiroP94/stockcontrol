@@ -1,6 +1,6 @@
 // stock-control-frontend/src/components/common/TabCRUD.tsx
 import React, { useState } from 'react';
-import { Plus, Pencil, Trash2, Search, Save, X, Loader2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Save, Loader2 } from 'lucide-react';
 import { GroupItem } from '../../types';
 import ConfirmModal from './ConfirmModal';
 import BaseModal from './BaseModal';
@@ -8,9 +8,9 @@ import BaseModal from './BaseModal';
 interface TabCRUDProps {
   type: 'group' | 'device' | 'value' | 'package';
   items: GroupItem[];
-  onAdd: (name: string, ...parentIds: number[]) => Promise<void>; // ← CORRIGIDO: Async
-  onUpdate: (id: number, name: string) => Promise<void>; // ← CORRIGIDO: Async
-  onDelete: (id: number) => Promise<void>; // ← CORRIGIDO: Async
+  onAdd: (name: string, ...parentIds: number[]) => void;
+  onUpdate: (id: number, name: string) => void;
+  onDelete: (id: number) => void;
   filters?: {
     groupId?: number;
     deviceId?: number;
@@ -19,7 +19,6 @@ interface TabCRUDProps {
   groups?: GroupItem[];
   devices?: GroupItem[];
   values?: GroupItem[];
-  loading?: boolean; // ← NOVO: Loading state
 }
 
 const TabCRUD: React.FC<TabCRUDProps> = ({
@@ -32,7 +31,6 @@ const TabCRUD: React.FC<TabCRUDProps> = ({
   groups = [],
   devices = [],
   values = [],
-  loading = false, // ← NOVO: Default false
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -41,7 +39,7 @@ const TabCRUD: React.FC<TabCRUDProps> = ({
   const [selectedItem, setSelectedItem] = useState<GroupItem | null>(null);
   const [newItemName, setNewItemName] = useState('');
   const [editItemName, setEditItemName] = useState('');
-  const [actionLoading, setActionLoading] = useState(false); // ← NOVO: Loading para ações
+  const [loading, setLoading] = useState(false);
 
   const getTypeName = () => {
     switch (type) {
@@ -56,60 +54,54 @@ const TabCRUD: React.FC<TabCRUDProps> = ({
     item.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // ✅ CORRIGIDO: Função assíncrona
   const handleAdd = async () => {
-    if (!newItemName.trim() || actionLoading) return;
+    if (!newItemName.trim() || loading) return;
     
-    setActionLoading(true);
+    setLoading(true);
     try {
       const parentIds: number[] = [];
       if (filters.groupId) parentIds.push(filters.groupId);
       if (filters.deviceId) parentIds.push(filters.deviceId);
       if (filters.valueId) parentIds.push(filters.valueId);
       
-      await onAdd(newItemName.trim(), ...parentIds); // ← AGORA COM AWAIT
+      await onAdd(newItemName.trim(), ...parentIds);
       setNewItemName('');
       setShowAddModal(false);
     } catch (error) {
       console.error('Erro ao criar item:', error);
-      // O erro já é tratado no componente pai
     } finally {
-      setActionLoading(false);
+      setLoading(false);
     }
   };
 
-  // ✅ CORRIGIDO: Função assíncrona
   const handleEdit = async () => {
-    if (!selectedItem || !editItemName.trim() || actionLoading) return;
+    if (!selectedItem || !editItemName.trim() || loading) return;
     
-    setActionLoading(true);
+    setLoading(true);
     try {
-      await onUpdate(selectedItem.id, editItemName.trim()); // ← AGORA COM AWAIT
+      await onUpdate(selectedItem.id, editItemName.trim());
       setShowEditModal(false);
       setSelectedItem(null);
       setEditItemName('');
     } catch (error) {
       console.error('Erro ao editar item:', error);
-      // O erro já é tratado no componente pai
     } finally {
-      setActionLoading(false);
+      setLoading(false);
     }
   };
 
-  // ✅ CORRIGIDO: Função assíncrona
   const handleDelete = async () => {
-    if (!selectedItem || actionLoading) return;
+    if (!selectedItem || loading) return;
     
-    setActionLoading(true);
+    setLoading(true);
     try {
-      await onDelete(selectedItem.id); // ← AGORA COM AWAIT
+      await onDelete(selectedItem.id);
       setShowDeleteModal(false);
       setSelectedItem(null);
     } catch (error) {
       console.error('Erro ao deletar item:', error);
-      // O erro já é tratado no componente pai
     } finally {
-      setActionLoading(false);
+      setLoading(false);
     }
   };
 
@@ -124,17 +116,16 @@ const TabCRUD: React.FC<TabCRUDProps> = ({
     setShowDeleteModal(true);
   };
 
-  // ✅ Verificar se pode adicionar baseado nos filtros necessários
   const canAdd = () => {
     switch (type) {
       case 'group':
-        return true; // Grupos podem ser criados sempre
+        return true;
       case 'device':
-        return !!filters.groupId; // Device precisa de grupo
+        return !!filters.groupId;
       case 'value':
-        return !!filters.groupId && !!filters.deviceId; // Value precisa de grupo e device
+        return !!filters.groupId && !!filters.deviceId;
       case 'package':
-        return !!filters.groupId && !!filters.deviceId && !!filters.valueId; // Package precisa de todos
+        return !!filters.groupId && !!filters.deviceId && !!filters.valueId;
       default:
         return false;
     }
@@ -176,11 +167,11 @@ const TabCRUD: React.FC<TabCRUDProps> = ({
         
         <button
           onClick={() => setShowAddModal(true)}
-          disabled={loading || !canAdd() || actionLoading}
+          disabled={loading || !canAdd()}
           title={getAddTooltip()}
           className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all duration-200"
         >
-          {actionLoading ? (
+          {loading ? (
             <Loader2 className="animate-spin" size={18} />
           ) : (
             <Plus size={18} />
@@ -215,61 +206,54 @@ const TabCRUD: React.FC<TabCRUDProps> = ({
 
       {/* Lista de itens */}
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="animate-spin text-blue-600" size={24} />
-            <span className="ml-2 text-gray-600">Carregando...</span>
-          </div>
-        ) : (
-          <table className="min-w-full">
-            <thead className="bg-gray-50">
+        <table className="min-w-full">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Nome do {getTypeName()}
+              </th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Ações
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200">
+            {filteredItems.length === 0 ? (
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Nome do {getTypeName()}
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Ações
-                </th>
+                <td colSpan={2} className="px-6 py-12 text-center text-gray-500">
+                  {searchTerm ? `Nenhum ${getTypeName().toLowerCase()} encontrado para "${searchTerm}"` 
+                             : `Nenhum ${getTypeName().toLowerCase()} encontrado`}
+                </td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {filteredItems.length === 0 ? (
-                <tr>
-                  <td colSpan={2} className="px-6 py-12 text-center text-gray-500">
-                    {searchTerm ? `Nenhum ${getTypeName().toLowerCase()} encontrado para "${searchTerm}"` 
-                               : `Nenhum ${getTypeName().toLowerCase()} encontrado`}
+            ) : (
+              filteredItems.map((item) => (
+                <tr key={item.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <p className="text-sm font-medium text-gray-900">{item.name}</p>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right">
+                    <button
+                      onClick={() => openEditModal(item)}
+                      disabled={loading}
+                      className="text-blue-600 hover:text-blue-700 mr-3 disabled:opacity-50"
+                      title="Editar"
+                    >
+                      <Pencil size={18} />
+                    </button>
+                    <button
+                      onClick={() => openDeleteModal(item)}
+                      disabled={loading}
+                      className="text-red-600 hover:text-red-700 disabled:opacity-50"
+                      title="Excluir"
+                    >
+                      <Trash2 size={18} />
+                    </button>
                   </td>
                 </tr>
-              ) : (
-                filteredItems.map((item) => (
-                  <tr key={item.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <p className="text-sm font-medium text-gray-900">{item.name}</p>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
-                      <button
-                        onClick={() => openEditModal(item)}
-                        disabled={actionLoading}
-                        className="text-blue-600 hover:text-blue-700 mr-3 disabled:opacity-50"
-                        title="Editar"
-                      >
-                        <Pencil size={18} />
-                      </button>
-                      <button
-                        onClick={() => openDeleteModal(item)}
-                        disabled={actionLoading}
-                        className="text-red-600 hover:text-red-700 disabled:opacity-50"
-                        title="Excluir"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        )}
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
 
       {/* Modal Adicionar */}
@@ -288,8 +272,8 @@ const TabCRUD: React.FC<TabCRUDProps> = ({
               type="text"
               value={newItemName}
               onChange={(e) => setNewItemName(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && !actionLoading && handleAdd()}
-              disabled={actionLoading}
+              onKeyPress={(e) => e.key === 'Enter' && !loading && handleAdd()}
+              disabled={loading}
               className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 disabled:opacity-50"
               placeholder={`Digite o nome do ${getTypeName().toLowerCase()}`}
               autoFocus
@@ -298,22 +282,22 @@ const TabCRUD: React.FC<TabCRUDProps> = ({
           <div className="flex justify-end gap-3">
             <button
               onClick={() => setShowAddModal(false)}
-              disabled={actionLoading}
+              disabled={loading}
               className="px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg disabled:opacity-50"
             >
               Cancelar
             </button>
             <button
               onClick={handleAdd}
-              disabled={!newItemName.trim() || actionLoading}
+              disabled={!newItemName.trim() || loading}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
             >
-              {actionLoading ? (
+              {loading ? (
                 <Loader2 className="animate-spin" size={16} />
               ) : (
                 <Plus size={16} />
               )}
-              {actionLoading ? 'Criando...' : 'Adicionar'}
+              {loading ? 'Criando...' : 'Adicionar'}
             </button>
           </div>
         </div>
@@ -335,8 +319,8 @@ const TabCRUD: React.FC<TabCRUDProps> = ({
               type="text"
               value={editItemName}
               onChange={(e) => setEditItemName(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && !actionLoading && handleEdit()}
-              disabled={actionLoading}
+              onKeyPress={(e) => e.key === 'Enter' && !loading && handleEdit()}
+              disabled={loading}
               className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 disabled:opacity-50"
               placeholder={`Digite o nome do ${getTypeName().toLowerCase()}`}
               autoFocus
@@ -345,38 +329,36 @@ const TabCRUD: React.FC<TabCRUDProps> = ({
           <div className="flex justify-end gap-3">
             <button
               onClick={() => setShowEditModal(false)}
-              disabled={actionLoading}
+              disabled={loading}
               className="px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg disabled:opacity-50"
             >
               Cancelar
             </button>
             <button
               onClick={handleEdit}
-              disabled={!editItemName.trim() || actionLoading}
+              disabled={!editItemName.trim() || loading}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
             >
-              {actionLoading ? (
+              {loading ? (
                 <Loader2 className="animate-spin" size={16} />
               ) : (
                 <Save size={16} />
               )}
-              {actionLoading ? 'Salvando...' : 'Salvar'}
+              {loading ? 'Salvando...' : 'Salvar'}
             </button>
           </div>
         </div>
       </BaseModal>
 
-      {/* Modal Confirmar Delete */}
+      {/* Modal Confirmar Delete - VERSÃO SIMPLES */}
       <ConfirmModal
         isOpen={showDeleteModal}
         onClose={() => setShowDeleteModal(false)}
         onConfirm={handleDelete}
         title={`Excluir ${getTypeName()}`}
-        message={`Tem certeza que deseja excluir "${selectedItem?.name}"?
-Esta ação não pode ser desfeita.`}
+        message={`Tem certeza que deseja excluir "${selectedItem?.name}"?\nEsta ação não pode ser desfeita.`}
         confirmText="Excluir"
         type="danger"
-        loading={actionLoading}
       />
     </div>
   );
