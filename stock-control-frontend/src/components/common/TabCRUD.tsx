@@ -1,6 +1,6 @@
 // stock-control-frontend/src/components/common/TabCRUD.tsx
 import React, { useState } from 'react';
-import { Plus, Pencil, Trash2, Search, Save, Loader2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Save } from 'lucide-react';
 import { GroupItem } from '../../types';
 import ConfirmModal from './ConfirmModal';
 import BaseModal from './BaseModal';
@@ -39,7 +39,6 @@ const TabCRUD: React.FC<TabCRUDProps> = ({
   const [selectedItem, setSelectedItem] = useState<GroupItem | null>(null);
   const [newItemName, setNewItemName] = useState('');
   const [editItemName, setEditItemName] = useState('');
-  const [loading, setLoading] = useState(false);
 
   const getTypeName = () => {
     switch (type) {
@@ -54,55 +53,34 @@ const TabCRUD: React.FC<TabCRUDProps> = ({
     item.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleAdd = async () => {
-    if (!newItemName.trim() || loading) return;
+  const handleAdd = () => {
+    if (!newItemName.trim()) return;
     
-    setLoading(true);
-    try {
-      const parentIds: number[] = [];
-      if (filters.groupId) parentIds.push(filters.groupId);
-      if (filters.deviceId) parentIds.push(filters.deviceId);
-      if (filters.valueId) parentIds.push(filters.valueId);
-      
-      await onAdd(newItemName.trim(), ...parentIds);
-      setNewItemName('');
-      setShowAddModal(false);
-    } catch (error) {
-      console.error('Erro ao criar item:', error);
-    } finally {
-      setLoading(false);
-    }
+    const parentIds: number[] = [];
+    if (filters.groupId) parentIds.push(filters.groupId);
+    if (filters.deviceId) parentIds.push(filters.deviceId);
+    if (filters.valueId) parentIds.push(filters.valueId);
+    
+    onAdd(newItemName.trim(), ...parentIds);
+    setNewItemName('');
+    setShowAddModal(false);
   };
 
-  const handleEdit = async () => {
-    if (!selectedItem || !editItemName.trim() || loading) return;
+  const handleEdit = () => {
+    if (!selectedItem || !editItemName.trim()) return;
     
-    setLoading(true);
-    try {
-      await onUpdate(selectedItem.id, editItemName.trim());
-      setShowEditModal(false);
-      setSelectedItem(null);
-      setEditItemName('');
-    } catch (error) {
-      console.error('Erro ao editar item:', error);
-    } finally {
-      setLoading(false);
-    }
+    onUpdate(selectedItem.id, editItemName.trim());
+    setShowEditModal(false);
+    setSelectedItem(null);
+    setEditItemName('');
   };
 
-  const handleDelete = async () => {
-    if (!selectedItem || loading) return;
+  const handleDelete = () => {
+    if (!selectedItem) return;
     
-    setLoading(true);
-    try {
-      await onDelete(selectedItem.id);
-      setShowDeleteModal(false);
-      setSelectedItem(null);
-    } catch (error) {
-      console.error('Erro ao deletar item:', error);
-    } finally {
-      setLoading(false);
-    }
+    onDelete(selectedItem.id);
+    setShowDeleteModal(false);
+    setSelectedItem(null);
   };
 
   const openEditModal = (item: GroupItem) => {
@@ -160,22 +138,17 @@ const TabCRUD: React.FC<TabCRUDProps> = ({
             placeholder={`Buscar ${getTypeName().toLowerCase()}...`}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            disabled={loading}
-            className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 disabled:opacity-50"
+            className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
           />
         </div>
         
         <button
           onClick={() => setShowAddModal(true)}
-          disabled={loading || !canAdd()}
+          disabled={!canAdd()}
           title={getAddTooltip()}
           className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all duration-200"
         >
-          {loading ? (
-            <Loader2 className="animate-spin" size={18} />
-          ) : (
-            <Plus size={18} />
-          )}
+          <Plus size={18} />
           Novo {getTypeName()}
         </button>
       </div>
@@ -234,16 +207,14 @@ const TabCRUD: React.FC<TabCRUDProps> = ({
                   <td className="px-6 py-4 whitespace-nowrap text-right">
                     <button
                       onClick={() => openEditModal(item)}
-                      disabled={loading}
-                      className="text-blue-600 hover:text-blue-700 mr-3 disabled:opacity-50"
+                      className="text-blue-600 hover:text-blue-700 mr-3"
                       title="Editar"
                     >
                       <Pencil size={18} />
                     </button>
                     <button
                       onClick={() => openDeleteModal(item)}
-                      disabled={loading}
-                      className="text-red-600 hover:text-red-700 disabled:opacity-50"
+                      className="text-red-600 hover:text-red-700"
                       title="Excluir"
                     >
                       <Trash2 size={18} />
@@ -272,9 +243,8 @@ const TabCRUD: React.FC<TabCRUDProps> = ({
               type="text"
               value={newItemName}
               onChange={(e) => setNewItemName(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && !loading && handleAdd()}
-              disabled={loading}
-              className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 disabled:opacity-50"
+              onKeyPress={(e) => e.key === 'Enter' && handleAdd()}
+              className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
               placeholder={`Digite o nome do ${getTypeName().toLowerCase()}`}
               autoFocus
             />
@@ -282,22 +252,17 @@ const TabCRUD: React.FC<TabCRUDProps> = ({
           <div className="flex justify-end gap-3">
             <button
               onClick={() => setShowAddModal(false)}
-              disabled={loading}
-              className="px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg disabled:opacity-50"
+              className="px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg"
             >
               Cancelar
             </button>
             <button
               onClick={handleAdd}
-              disabled={!newItemName.trim() || loading}
+              disabled={!newItemName.trim()}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
             >
-              {loading ? (
-                <Loader2 className="animate-spin" size={16} />
-              ) : (
-                <Plus size={16} />
-              )}
-              {loading ? 'Criando...' : 'Adicionar'}
+              <Plus size={16} />
+              Adicionar
             </button>
           </div>
         </div>
@@ -319,9 +284,8 @@ const TabCRUD: React.FC<TabCRUDProps> = ({
               type="text"
               value={editItemName}
               onChange={(e) => setEditItemName(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && !loading && handleEdit()}
-              disabled={loading}
-              className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 disabled:opacity-50"
+              onKeyPress={(e) => e.key === 'Enter' && handleEdit()}
+              className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
               placeholder={`Digite o nome do ${getTypeName().toLowerCase()}`}
               autoFocus
             />
@@ -329,28 +293,23 @@ const TabCRUD: React.FC<TabCRUDProps> = ({
           <div className="flex justify-end gap-3">
             <button
               onClick={() => setShowEditModal(false)}
-              disabled={loading}
-              className="px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg disabled:opacity-50"
+              className="px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg"
             >
               Cancelar
             </button>
             <button
               onClick={handleEdit}
-              disabled={!editItemName.trim() || loading}
+              disabled={!editItemName.trim()}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
             >
-              {loading ? (
-                <Loader2 className="animate-spin" size={16} />
-              ) : (
-                <Save size={16} />
-              )}
-              {loading ? 'Salvando...' : 'Salvar'}
+              <Save size={16} />
+              Salvar
             </button>
           </div>
         </div>
       </BaseModal>
 
-      {/* Modal Confirmar Delete - VERSÃO SIMPLES */}
+      {/* Modal Confirmar Delete - VERSÃO MÍNIMA */}
       <ConfirmModal
         isOpen={showDeleteModal}
         onClose={() => setShowDeleteModal(false)}

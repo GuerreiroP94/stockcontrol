@@ -43,10 +43,8 @@ const GroupsMaintenancePage: React.FC = () => {
 
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
-    // Limpar mensagens ao mudar de aba
     setError('');
     setSuccess('');
-    // Limpar filtros ao mudar de aba
     if (tab === 'group') {
       setSelectedGroupId(undefined);
       setSelectedDeviceId(undefined);
@@ -59,7 +57,6 @@ const GroupsMaintenancePage: React.FC = () => {
     }
   };
 
-  // Versão simplificada - não async para compatibilidade
   const handleAdd = (name: string, ...parentIds: number[]) => {
     if (!name?.trim()) {
       setError('Nome é obrigatório');
@@ -69,62 +66,59 @@ const GroupsMaintenancePage: React.FC = () => {
     setError('');
     setSuccess('');
 
-    // Executa a operação assíncrona sem await para manter compatibilidade
-    const performAdd = async () => {
-      try {
-        switch (activeTab) {
-          case 'group':
-            await addGroup(name.trim());
-            break;
-          case 'device':
-            if (!parentIds[0]) {
-              throw new Error('Selecione um grupo primeiro');
-            }
-            await addDevice(name.trim(), parentIds[0]);
-            break;
-          case 'value':
-            if (!parentIds[0] || !parentIds[1]) {
-              throw new Error('Selecione um grupo e device primeiro');
-            }
-            await addValue(name.trim(), parentIds[0], parentIds[1]);
-            break;
-          case 'package':
-            if (!parentIds[0] || !parentIds[1] || !parentIds[2]) {
-              throw new Error('Selecione um grupo, device e value primeiro');
-            }
-            await addPackage(name.trim(), parentIds[0], parentIds[1], parentIds[2]);
-            break;
-        }
-
-        setSuccess(`${getTabLabel(activeTab)} "${name}" criado com sucesso!`);
-        setTimeout(() => setSuccess(''), 5000);
-        
-      } catch (error: any) {
-        console.error(`Erro ao criar ${getTabLabel(activeTab)}:`, error);
-        
-        let errorMessage = `Erro ao criar ${getTabLabel(activeTab)}`;
-        
-        if (error?.response?.status === 403) {
-          errorMessage = 'Acesso negado. Apenas administradores podem criar grupos.';
-        } else if (error?.response?.status === 400) {
-          errorMessage = error?.response?.data?.message || 'Dados inválidos. Verifique se o nome já existe.';
-        } else if (error?.response?.status === 401) {
-          errorMessage = 'Sessão expirada. Faça login novamente.';
-        } else if (error?.message) {
-          errorMessage = error.message;
-        } else if (typeof error === 'string') {
-          errorMessage = error;
-        }
-        
-        setError(errorMessage);
-        setTimeout(() => setError(''), 8000);
+    try {
+      switch (activeTab) {
+        case 'group':
+          addGroup(name.trim());
+          break;
+        case 'device':
+          if (!parentIds[0]) {
+            setError('Selecione um grupo primeiro');
+            return;
+          }
+          addDevice(name.trim(), parentIds[0]);
+          break;
+        case 'value':
+          if (!parentIds[0] || !parentIds[1]) {
+            setError('Selecione um grupo e device primeiro');
+            return;
+          }
+          addValue(name.trim(), parentIds[0], parentIds[1]);
+          break;
+        case 'package':
+          if (!parentIds[0] || !parentIds[1] || !parentIds[2]) {
+            setError('Selecione um grupo, device e value primeiro');
+            return;
+          }
+          addPackage(name.trim(), parentIds[0], parentIds[1], parentIds[2]);
+          break;
       }
-    };
 
-    performAdd();
+      setSuccess(`${getTabLabel(activeTab)} "${name}" criado com sucesso!`);
+      setTimeout(() => setSuccess(''), 5000);
+      
+    } catch (error: any) {
+      console.error(`Erro ao criar ${getTabLabel(activeTab)}:`, error);
+      
+      let errorMessage = `Erro ao criar ${getTabLabel(activeTab)}`;
+      
+      if (error?.response?.status === 403) {
+        errorMessage = 'Acesso negado. Apenas administradores podem criar grupos.';
+      } else if (error?.response?.status === 400) {
+        errorMessage = error?.response?.data?.message || 'Dados inválidos. Verifique se o nome já existe.';
+      } else if (error?.response?.status === 401) {
+        errorMessage = 'Sessão expirada. Faça login novamente.';
+      } else if (error?.message) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
+      setError(errorMessage);
+      setTimeout(() => setError(''), 8000);
+    }
   };
 
-  // Versão simplificada - não async para compatibilidade
   const handleUpdate = (id: number, name: string) => {
     if (!name?.trim()) {
       setError('Nome é obrigatório');
@@ -134,55 +128,46 @@ const GroupsMaintenancePage: React.FC = () => {
     setError('');
     setSuccess('');
 
-    const performUpdate = async () => {
-      try {
-        await updateItem(activeTab, id, name.trim());
-        setSuccess(`${getTabLabel(activeTab)} atualizado com sucesso!`);
-        setTimeout(() => setSuccess(''), 5000);
-      } catch (error: any) {
-        console.error(`Erro ao atualizar ${activeTab}:`, error);
-        
-        let errorMessage = `Erro ao atualizar ${getTabLabel(activeTab)}`;
-        if (error?.response?.status === 403) {
-          errorMessage = 'Acesso negado. Apenas administradores podem editar.';
-        } else if (error?.message) {
-          errorMessage = error.message;
-        }
-        
-        setError(errorMessage);
-        setTimeout(() => setError(''), 8000);
+    try {
+      updateItem(activeTab, id, name.trim());
+      setSuccess(`${getTabLabel(activeTab)} atualizado com sucesso!`);
+      setTimeout(() => setSuccess(''), 5000);
+    } catch (error: any) {
+      console.error(`Erro ao atualizar ${activeTab}:`, error);
+      
+      let errorMessage = `Erro ao atualizar ${getTabLabel(activeTab)}`;
+      if (error?.response?.status === 403) {
+        errorMessage = 'Acesso negado. Apenas administradores podem editar.';
+      } else if (error?.message) {
+        errorMessage = error.message;
       }
-    };
-
-    performUpdate();
+      
+      setError(errorMessage);
+      setTimeout(() => setError(''), 8000);
+    }
   };
 
-  // Versão simplificada - não async para compatibilidade
   const handleDelete = (id: number) => {
     setError('');
     setSuccess('');
 
-    const performDelete = async () => {
-      try {
-        await deleteItem(activeTab, id);
-        setSuccess(`${getTabLabel(activeTab)} excluído com sucesso!`);
-        setTimeout(() => setSuccess(''), 5000);
-      } catch (error: any) {
-        console.error(`Erro ao deletar ${activeTab}:`, error);
-        
-        let errorMessage = `Erro ao excluir ${getTabLabel(activeTab)}`;
-        if (error?.response?.status === 403) {
-          errorMessage = 'Acesso negado. Apenas administradores podem excluir.';
-        } else if (error?.message) {
-          errorMessage = error.message;
-        }
-        
-        setError(errorMessage);
-        setTimeout(() => setError(''), 8000);
+    try {
+      deleteItem(activeTab, id);
+      setSuccess(`${getTabLabel(activeTab)} excluído com sucesso!`);
+      setTimeout(() => setSuccess(''), 5000);
+    } catch (error: any) {
+      console.error(`Erro ao deletar ${activeTab}:`, error);
+      
+      let errorMessage = `Erro ao excluir ${getTabLabel(activeTab)}`;
+      if (error?.response?.status === 403) {
+        errorMessage = 'Acesso negado. Apenas administradores podem excluir.';
+      } else if (error?.message) {
+        errorMessage = error.message;
       }
-    };
-
-    performDelete();
+      
+      setError(errorMessage);
+      setTimeout(() => setError(''), 8000);
+    }
   };
 
   const getTabLabel = (tab: TabType): string => {

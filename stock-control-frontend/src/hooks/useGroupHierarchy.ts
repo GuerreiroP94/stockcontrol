@@ -28,7 +28,6 @@ export const useGroupHierarchy = () => {
     } catch (error: any) {
       console.error('Erro ao carregar hierarquia:', error);
       setError('Erro ao carregar dados da hierarquia');
-      // Em caso de erro, manter arrays vazios
       setGroups([]);
       setDevices([]);
       setValues([]);
@@ -58,280 +57,247 @@ export const useGroupHierarchy = () => {
     return filtered;
   };
 
-  const addGroup = async (name: string): Promise<GroupItem> => {
-    try {
-      const result = await groupHierarchyService.createGroup(name);
-      
-      if (result.success && result.item) {
-        // Atualizar estado local imediatamente
-        setGroups(prevGroups => [...prevGroups, result.item!]);
-        
-        // Recarregar hierarquia completa para garantir consistência
-        setTimeout(() => {
-          loadFullHierarchy();
-        }, 100);
-        
-        return result.item;
-      } else {
-        throw new Error(result.message || 'Erro ao criar grupo');
-      }
-    } catch (error: any) {
-      console.error('Erro ao criar grupo:', error);
-      
-      // Melhor tratamento de mensagens de erro
-      if (error?.response?.status === 403) {
-        throw new Error('Acesso negado. Apenas administradores podem criar grupos.');
-      } else if (error?.response?.status === 400) {
-        const message = error?.response?.data?.message || error?.response?.data?.Message;
-        throw new Error(message || 'Dados inválidos. Verifique se o nome já existe.');
-      } else if (error?.response?.status === 401) {
-        throw new Error('Sessão expirada. Faça login novamente.');
-      } else if (error?.message) {
-        throw new Error(error.message);
-      } else {
-        throw new Error('Erro ao criar grupo');
-      }
-    }
+  const addGroup = (name: string) => {
+    groupHierarchyService.createGroup(name)
+      .then(result => {
+        if (result.success && result.item) {
+          setGroups(prevGroups => [...prevGroups, result.item!]);
+          setTimeout(loadFullHierarchy, 100);
+        } else {
+          throw new Error(result.message || 'Erro ao criar grupo');
+        }
+      })
+      .catch(error => {
+        console.error('Erro ao criar grupo:', error);
+        if (error?.response?.status === 403) {
+          throw new Error('Acesso negado. Apenas administradores podem criar grupos.');
+        } else if (error?.response?.status === 400) {
+          const message = error?.response?.data?.message || error?.response?.data?.Message;
+          throw new Error(message || 'Dados inválidos. Verifique se o nome já existe.');
+        } else if (error?.response?.status === 401) {
+          throw new Error('Sessão expirada. Faça login novamente.');
+        } else if (error?.message) {
+          throw new Error(error.message);
+        } else {
+          throw new Error('Erro ao criar grupo');
+        }
+      });
   };
 
-  const addDevice = async (name: string, groupId: number): Promise<GroupItem> => {
-    try {
-      const result = await groupHierarchyService.createDevice(groupId, name);
-      
-      if (result.success && result.item) {
-        const newDevice = { ...result.item, groupId };
-        setDevices(prevDevices => [...prevDevices, newDevice]);
-        
-        setTimeout(() => {
-          loadFullHierarchy();
-        }, 100);
-        
-        return newDevice;
-      } else {
-        throw new Error(result.message || 'Erro ao criar device');
-      }
-    } catch (error: any) {
-      console.error('Erro ao criar device:', error);
-      
-      if (error?.response?.status === 403) {
-        throw new Error('Acesso negado. Apenas administradores podem criar devices.');
-      } else if (error?.response?.status === 400) {
-        const message = error?.response?.data?.message || error?.response?.data?.Message;
-        throw new Error(message || 'Dados inválidos.');
-      } else if (error?.message) {
-        throw new Error(error.message);
-      } else {
-        throw new Error('Erro ao criar device');
-      }
-    }
+  const addDevice = (name: string, groupId: number) => {
+    groupHierarchyService.createDevice(groupId, name)
+      .then(result => {
+        if (result.success && result.item) {
+          const newDevice = { ...result.item, groupId };
+          setDevices(prevDevices => [...prevDevices, newDevice]);
+          setTimeout(loadFullHierarchy, 100);
+        } else {
+          throw new Error(result.message || 'Erro ao criar device');
+        }
+      })
+      .catch(error => {
+        console.error('Erro ao criar device:', error);
+        if (error?.response?.status === 403) {
+          throw new Error('Acesso negado. Apenas administradores podem criar devices.');
+        } else if (error?.response?.status === 400) {
+          const message = error?.response?.data?.message || error?.response?.data?.Message;
+          throw new Error(message || 'Dados inválidos.');
+        } else if (error?.message) {
+          throw new Error(error.message);
+        } else {
+          throw new Error('Erro ao criar device');
+        }
+      });
   };
 
-  const addValue = async (name: string, groupId: number, deviceId: number): Promise<GroupItem> => {
-    try {
-      const result = await groupHierarchyService.createValue(deviceId, name);
-      
-      if (result.success && result.item) {
-        const newValue = { ...result.item, groupId, deviceId };
-        setValues(prevValues => [...prevValues, newValue]);
-        
-        setTimeout(() => {
-          loadFullHierarchy();
-        }, 100);
-        
-        return newValue;
-      } else {
-        throw new Error(result.message || 'Erro ao criar value');
-      }
-    } catch (error: any) {
-      console.error('Erro ao criar value:', error);
-      
-      if (error?.response?.status === 403) {
-        throw new Error('Acesso negado. Apenas administradores podem criar values.');
-      } else if (error?.response?.status === 400) {
-        const message = error?.response?.data?.message || error?.response?.data?.Message;
-        throw new Error(message || 'Dados inválidos.');
-      } else if (error?.message) {
-        throw new Error(error.message);
-      } else {
-        throw new Error('Erro ao criar value');
-      }
-    }
+  const addValue = (name: string, groupId: number, deviceId: number) => {
+    groupHierarchyService.createValue(deviceId, name)
+      .then(result => {
+        if (result.success && result.item) {
+          const newValue = { ...result.item, groupId, deviceId };
+          setValues(prevValues => [...prevValues, newValue]);
+          setTimeout(loadFullHierarchy, 100);
+        } else {
+          throw new Error(result.message || 'Erro ao criar value');
+        }
+      })
+      .catch(error => {
+        console.error('Erro ao criar value:', error);
+        if (error?.response?.status === 403) {
+          throw new Error('Acesso negado. Apenas administradores podem criar values.');
+        } else if (error?.response?.status === 400) {
+          const message = error?.response?.data?.message || error?.response?.data?.Message;
+          throw new Error(message || 'Dados inválidos.');
+        } else if (error?.message) {
+          throw new Error(error.message);
+        } else {
+          throw new Error('Erro ao criar value');
+        }
+      });
   };
 
-  const addPackage = async (name: string, groupId: number, deviceId: number, valueId: number): Promise<GroupItem> => {
-    try {
-      const result = await groupHierarchyService.createPackage(valueId, name);
-      
-      if (result.success && result.item) {
-        const newPackage = { ...result.item, groupId, deviceId, valueId };
-        setPackages(prevPackages => [...prevPackages, newPackage]);
-        
-        setTimeout(() => {
-          loadFullHierarchy();
-        }, 100);
-        
-        return newPackage;
-      } else {
-        throw new Error(result.message || 'Erro ao criar package');
-      }
-    } catch (error: any) {
-      console.error('Erro ao criar package:', error);
-      
-      if (error?.response?.status === 403) {
-        throw new Error('Acesso negado. Apenas administradores podem criar packages.');
-      } else if (error?.response?.status === 400) {
-        const message = error?.response?.data?.message || error?.response?.data?.Message;
-        throw new Error(message || 'Dados inválidos.');
-      } else if (error?.message) {
-        throw new Error(error.message);
-      } else {
-        throw new Error('Erro ao criar package');
-      }
-    }
+  const addPackage = (name: string, groupId: number, deviceId: number, valueId: number) => {
+    groupHierarchyService.createPackage(valueId, name)
+      .then(result => {
+        if (result.success && result.item) {
+          const newPackage = { ...result.item, groupId, deviceId, valueId };
+          setPackages(prevPackages => [...prevPackages, newPackage]);
+          setTimeout(loadFullHierarchy, 100);
+        } else {
+          throw new Error(result.message || 'Erro ao criar package');
+        }
+      })
+      .catch(error => {
+        console.error('Erro ao criar package:', error);
+        if (error?.response?.status === 403) {
+          throw new Error('Acesso negado. Apenas administradores podem criar packages.');
+        } else if (error?.response?.status === 400) {
+          const message = error?.response?.data?.message || error?.response?.data?.Message;
+          throw new Error(message || 'Dados inválidos.');
+        } else if (error?.message) {
+          throw new Error(error.message);
+        } else {
+          throw new Error('Erro ao criar package');
+        }
+      });
   };
 
-  const updateItem = async (type: 'group' | 'device' | 'value' | 'package', id: number, name: string): Promise<void> => {
-    try {
-      let result;
-      
-      switch (type) {
-        case 'group':
-          result = await groupHierarchyService.updateGroup(id, name);
-          if (result.success) {
-            setGroups(groups.map(g => g.id === id ? { ...g, name } : g));
-          }
-          break;
-        case 'device':
-          result = await groupHierarchyService.updateDevice(id, name);
-          if (result.success) {
-            setDevices(devices.map(d => d.id === id ? { ...d, name } : d));
-          }
-          break;
-        case 'value':
-          result = await groupHierarchyService.updateValue(id, name);
-          if (result.success) {
-            setValues(values.map(v => v.id === id ? { ...v, name } : v));
-          }
-          break;
-        case 'package':
-          result = await groupHierarchyService.updatePackage(id, name);
-          if (result.success) {
-            setPackages(packages.map(p => p.id === id ? { ...p, name } : p));
-          }
-          break;
-      }
-
-      if (result?.success) {
-        // Recarregar hierarquia completa após atualização
-        setTimeout(() => {
-          loadFullHierarchy();
-        }, 100);
-      } else {
-        throw new Error(result?.message || `Erro ao atualizar ${type}`);
-      }
-    } catch (error: any) {
-      console.error(`Erro ao atualizar ${type}:`, error);
-      
-      if (error?.response?.status === 403) {
-        throw new Error('Acesso negado. Apenas administradores podem editar.');
-      } else if (error?.response?.status === 400) {
-        const message = error?.response?.data?.message || error?.response?.data?.Message;
-        throw new Error(message || 'Dados inválidos.');
-      } else if (error?.message) {
-        throw new Error(error.message);
-      } else {
-        throw new Error(`Erro ao atualizar ${type}`);
-      }
+  const updateItem = (type: 'group' | 'device' | 'value' | 'package', id: number, name: string) => {
+    let servicePromise;
+    
+    switch (type) {
+      case 'group':
+        servicePromise = groupHierarchyService.updateGroup(id, name);
+        break;
+      case 'device':
+        servicePromise = groupHierarchyService.updateDevice(id, name);
+        break;
+      case 'value':
+        servicePromise = groupHierarchyService.updateValue(id, name);
+        break;
+      case 'package':
+        servicePromise = groupHierarchyService.updatePackage(id, name);
+        break;
+      default:
+        return;
     }
+
+    servicePromise
+      .then(result => {
+        if (result?.success) {
+          switch (type) {
+            case 'group':
+              setGroups(groups.map(g => g.id === id ? { ...g, name } : g));
+              break;
+            case 'device':
+              setDevices(devices.map(d => d.id === id ? { ...d, name } : d));
+              break;
+            case 'value':
+              setValues(values.map(v => v.id === id ? { ...v, name } : v));
+              break;
+            case 'package':
+              setPackages(packages.map(p => p.id === id ? { ...p, name } : p));
+              break;
+          }
+          setTimeout(loadFullHierarchy, 100);
+        } else {
+          throw new Error(result?.message || `Erro ao atualizar ${type}`);
+        }
+      })
+      .catch(error => {
+        console.error(`Erro ao atualizar ${type}:`, error);
+        if (error?.response?.status === 403) {
+          throw new Error('Acesso negado. Apenas administradores podem editar.');
+        } else if (error?.response?.status === 400) {
+          const message = error?.response?.data?.message || error?.response?.data?.Message;
+          throw new Error(message || 'Dados inválidos.');
+        } else if (error?.message) {
+          throw new Error(error.message);
+        } else {
+          throw new Error(`Erro ao atualizar ${type}`);
+        }
+      });
   };
 
-  const deleteItem = async (type: 'group' | 'device' | 'value' | 'package', id: number): Promise<void> => {
-    try {
-      let result;
-      
-      switch (type) {
-        case 'group':
-          result = await groupHierarchyService.deleteGroup(id);
-          if (result.success) {
-            setGroups(groups.filter(g => g.id !== id));
-            // Remove items dependentes
-            setDevices(devices.filter(d => d.groupId !== id));
-            setValues(values.filter(v => v.groupId !== id));
-            setPackages(packages.filter(p => p.groupId !== id));
-          }
-          break;
-        case 'device':
-          result = await groupHierarchyService.deleteDevice(id);
-          if (result.success) {
-            setDevices(devices.filter(d => d.id !== id));
-            // Remove items dependentes
-            setValues(values.filter(v => v.deviceId !== id));
-            setPackages(packages.filter(p => p.deviceId !== id));
-          }
-          break;
-        case 'value':
-          result = await groupHierarchyService.deleteValue(id);
-          if (result.success) {
-            setValues(values.filter(v => v.id !== id));
-            // Remove items dependentes
-            setPackages(packages.filter(p => p.valueId !== id));
-          }
-          break;
-        case 'package':
-          result = await groupHierarchyService.deletePackage(id);
-          if (result.success) {
-            setPackages(packages.filter(p => p.id !== id));
-          }
-          break;
-      }
-
-      if (result?.success) {
-        // Recarregar hierarquia completa após exclusão
-        setTimeout(() => {
-          loadFullHierarchy();
-        }, 100);
-      } else {
-        throw new Error(result?.message || `Erro ao excluir ${type}`);
-      }
-    } catch (error: any) {
-      console.error(`Erro ao deletar ${type}:`, error);
-      
-      if (error?.response?.status === 403) {
-        throw new Error('Acesso negado. Apenas administradores podem excluir.');
-      } else if (error?.response?.status === 400) {
-        const message = error?.response?.data?.message || error?.response?.data?.Message;
-        throw new Error(message || 'Este item não pode ser excluído pois possui dependências.');
-      } else if (error?.message) {
-        throw new Error(error.message);
-      } else {
-        throw new Error(`Erro ao excluir ${type}`);
-      }
+  const deleteItem = (type: 'group' | 'device' | 'value' | 'package', id: number) => {
+    let servicePromise;
+    
+    switch (type) {
+      case 'group':
+        servicePromise = groupHierarchyService.deleteGroup(id);
+        break;
+      case 'device':
+        servicePromise = groupHierarchyService.deleteDevice(id);
+        break;
+      case 'value':
+        servicePromise = groupHierarchyService.deleteValue(id);
+        break;
+      case 'package':
+        servicePromise = groupHierarchyService.deletePackage(id);
+        break;
+      default:
+        return;
     }
+
+    servicePromise
+      .then(result => {
+        if (result?.success) {
+          switch (type) {
+            case 'group':
+              setGroups(groups.filter(g => g.id !== id));
+              setDevices(devices.filter(d => d.groupId !== id));
+              setValues(values.filter(v => v.groupId !== id));
+              setPackages(packages.filter(p => p.groupId !== id));
+              break;
+            case 'device':
+              setDevices(devices.filter(d => d.id !== id));
+              setValues(values.filter(v => v.deviceId !== id));
+              setPackages(packages.filter(p => p.deviceId !== id));
+              break;
+            case 'value':
+              setValues(values.filter(v => v.id !== id));
+              setPackages(packages.filter(p => p.valueId !== id));
+              break;
+            case 'package':
+              setPackages(packages.filter(p => p.id !== id));
+              break;
+          }
+          setTimeout(loadFullHierarchy, 100);
+        } else {
+          throw new Error(result?.message || `Erro ao excluir ${type}`);
+        }
+      })
+      .catch(error => {
+        console.error(`Erro ao deletar ${type}:`, error);
+        if (error?.response?.status === 403) {
+          throw new Error('Acesso negado. Apenas administradores podem excluir.');
+        } else if (error?.response?.status === 400) {
+          const message = error?.response?.data?.message || error?.response?.data?.Message;
+          throw new Error(message || 'Este item não pode ser excluído pois possui dependências.');
+        } else if (error?.message) {
+          throw new Error(error.message);
+        } else {
+          throw new Error(`Erro ao excluir ${type}`);
+        }
+      });
   };
 
   return {
-    // Estados
     groups,
     devices,
     values,
     packages,
     loading,
     error,
-    
-    // Funções de filtro
     getFilteredDevices,
     getFilteredValues,
     getFilteredPackages,
-    
-    // Operações CRUD
     addGroup,
     addDevice,
     addValue,
     addPackage,
     updateItem,
     deleteItem,
-    
-    // Utilitários
     reloadHierarchy: loadFullHierarchy
   };
 };
