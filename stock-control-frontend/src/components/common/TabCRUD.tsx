@@ -1,4 +1,3 @@
-// stock-control-frontend/src/components/common/TabCRUD.tsx
 import React, { useState } from 'react';
 import { Plus, Pencil, Trash2, Search, Save } from 'lucide-react';
 import { GroupItem } from '../../types';
@@ -94,39 +93,6 @@ const TabCRUD: React.FC<TabCRUDProps> = ({
     setShowDeleteModal(true);
   };
 
-  const canAdd = () => {
-    switch (type) {
-      case 'group':
-        return true;
-      case 'device':
-        return !!filters.groupId;
-      case 'value':
-        return !!filters.groupId && !!filters.deviceId;
-      case 'package':
-        return !!filters.groupId && !!filters.deviceId && !!filters.valueId;
-      default:
-        return false;
-    }
-  };
-
-  const getAddTooltip = () => {
-    switch (type) {
-      case 'device':
-        return !filters.groupId ? 'Selecione um grupo primeiro' : `Novo ${getTypeName()}`;
-      case 'value':
-        return !filters.groupId ? 'Selecione um grupo primeiro' 
-             : !filters.deviceId ? 'Selecione um device primeiro' 
-             : `Novo ${getTypeName()}`;
-      case 'package':
-        return !filters.groupId ? 'Selecione um grupo primeiro'
-             : !filters.deviceId ? 'Selecione um device primeiro'
-             : !filters.valueId ? 'Selecione um value primeiro'
-             : `Novo ${getTypeName()}`;
-      default:
-        return `Novo ${getTypeName()}`;
-    }
-  };
-
   return (
     <div className="space-y-6">
       {/* Header com busca e botão adicionar */}
@@ -144,38 +110,12 @@ const TabCRUD: React.FC<TabCRUDProps> = ({
         
         <button
           onClick={() => setShowAddModal(true)}
-          disabled={!canAdd()}
-          title={getAddTooltip()}
-          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all duration-200"
+          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all duration-200"
         >
           <Plus size={18} />
           Novo {getTypeName()}
         </button>
       </div>
-
-      {/* Filtros aplicados */}
-      {(filters.groupId || filters.deviceId || filters.valueId) && (
-        <div className="bg-blue-50 p-4 rounded-lg">
-          <h4 className="text-sm font-medium text-blue-900 mb-2">Filtros aplicados:</h4>
-          <div className="flex gap-2 flex-wrap">
-            {filters.groupId && (
-              <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">
-                Grupo: {groups.find(g => g.id === filters.groupId)?.name}
-              </span>
-            )}
-            {filters.deviceId && type !== 'device' && (
-              <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm">
-                Device: {devices.find(d => d.id === filters.deviceId)?.name}
-              </span>
-            )}
-            {filters.valueId && type === 'package' && (
-              <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm">
-                Value: {values.find(v => v.id === filters.valueId)?.name}
-              </span>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Lista de itens */}
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
@@ -194,8 +134,7 @@ const TabCRUD: React.FC<TabCRUDProps> = ({
             {filteredItems.length === 0 ? (
               <tr>
                 <td colSpan={2} className="px-6 py-12 text-center text-gray-500">
-                  {searchTerm ? `Nenhum ${getTypeName().toLowerCase()} encontrado para "${searchTerm}"` 
-                             : `Nenhum ${getTypeName().toLowerCase()} encontrado`}
+                  Nenhum {getTypeName().toLowerCase()} encontrado
                 </td>
               </tr>
             ) : (
@@ -309,13 +248,13 @@ const TabCRUD: React.FC<TabCRUDProps> = ({
         </div>
       </BaseModal>
 
-      {/* Modal Confirmar Delete - VERSÃO MÍNIMA */}
+      {/* Modal Confirmar Delete - SEM PROPS EXTRAS */}
       <ConfirmModal
         isOpen={showDeleteModal}
         onClose={() => setShowDeleteModal(false)}
         onConfirm={handleDelete}
         title={`Excluir ${getTypeName()}`}
-        message={`Tem certeza que deseja excluir "${selectedItem?.name}"?\nEsta ação não pode ser desfeita.`}
+        message={`Tem certeza que deseja excluir "${selectedItem?.name}"?`}
         confirmText="Excluir"
         type="danger"
       />
