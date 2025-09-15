@@ -1,3 +1,4 @@
+// stock-control-frontend/src/pages/components/GroupsMaintenancePage.tsx
 import React, { useState } from 'react';
 import { Settings, Package, Cpu, Tag, Box } from 'lucide-react';
 import { useGroupHierarchy } from '../../hooks/useGroupHierarchy';
@@ -11,6 +12,7 @@ const GroupsMaintenancePage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('group');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [loading, setLoading] = useState(false); // ← NOVO: Loading state
   
   // Filtros hierárquicos
   const [selectedGroupId, setSelectedGroupId] = useState<number | undefined>();
@@ -42,6 +44,9 @@ const GroupsMaintenancePage: React.FC = () => {
 
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
+    // Limpar mensagens ao mudar de aba
+    setError('');
+    setSuccess('');
     // Limpar filtros ao mudar de aba
     if (tab === 'group') {
       setSelectedGroupId(undefined);
@@ -55,74 +60,157 @@ const GroupsMaintenancePage: React.FC = () => {
     }
   };
 
-  const handleAdd = (name: string, ...parentIds: number[]) => {
+  // ✅ CORRIGIDO: Função assíncrona com tratamento de erro adequado
+  const handleAdd = async (name: string, ...parentIds: number[]) => {
+    if (!name?.trim()) {
+      setError('Nome é obrigatório');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    setSuccess('');
+
     try {
+      let result;
+      
       switch (activeTab) {
         case 'group':
-          addGroup(name);
+          result = await addGroup(name.trim()); // ← AGORA COM AWAIT
           break;
         case 'device':
-          if (parentIds[0]) {
-            addDevice(name, parentIds[0]);
+          if (!parentIds[0]) {
+            throw new Error('Selecione um grupo primeiro');
           }
+          result = await addDevice(name.trim(), parentIds[0]);
           break;
         case 'value':
-          if (parentIds[0] && parentIds[1]) {
-            addValue(name, parentIds[0], parentIds[1]);
+          if (!parentIds[0] || !parentIds[1]) {
+            throw new Error('Selecione um grupo e device primeiro');
           }
+          result = await addValue(name.trim(), parentIds[0], parentIds[1]);
           break;
         case 'package':
-          if (parentIds[0] && parentIds[1] && parentIds[2]) {
-            addPackage(name, parentIds[0], parentIds[1], parentIds[2]);
+          if (!parentIds[0] || !parentIds[1] || !parentIds[2]) {
+            throw new Error('Selecione um grupo, device e value primeiro');
           }
+          result = await addPackage(name.trim(), parentIds[0], parentIds[1], parentIds[2]);
           break;
+        default:
+          throw new Error('Tipo inválido');
       }
-      setSuccess(`${getTabLabel(activeTab)} criado com sucesso!`);
-      setTimeout(() => setSuccess(''), 3000);
-    } catch (error) {
-      setError(`Erro ao criar ${getTabLabel(activeTab)}`);
+
+      // ✅ SÓ MOSTRA SUCESSO SE REALMENTE CRIOU
+      if (result) {
+        setSuccess(`${getTabLabel(activeTab)} "${name}" criado com sucesso!`);
+        setTimeout(() => setSuccess(''), 5000);
+      }
+      
+    } catch (error: any) {
+      console.error(`Erro ao criar ${getTabLabel(activeTab)}:`, error);
+      
+      // ✅ TRATAMENTO DE ERRO MELHORADO
+      let errorMessage = `Erro ao criar ${getTabLabel(activeTab)}`;
+      
+      if (error?.response?.status === 403) {
+        errorMessage = 'Acesso negado. Apenas administradores podem criar grupos.';
+      } else if (error?.response?.status === 400) {
+        errorMessage = error?.response?.data?.message || 'Dados inválidos. Verifique se o nome já existe.';
+      } else if (error?.response?.status === 401) {
+        errorMessage = 'Sessão expirada. Faça login novamente.';
+      } else if (error?.message) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
+      setError(errorMessage);
+      setTimeout(() => setError(''), 8000);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleUpdate = (id: number, name: string) => {
+  // ✅ CORRIGIDO: Função assíncrona com tratamento de erro adequado
+  const handleUpdate = async (id: number, name: string) => {
+    if (!name?.trim()) {
+      setError('Nome é obrigatório');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    setSuccess('');
+
     try {
-      updateItem(activeTab, id, name);
+      await updateItem(activeTab, id, name.trim()); // ← AGORA COM AWAIT
       setSuccess(`${getTabLabel(activeTab)} atualizado com sucesso!`);
-      setTimeout(() => setSuccess(''), 3000);
-    } catch (error) {
-      setError(`Erro ao atualizar ${getTabLabel(activeTab)}`);
+      setTimeout(() => setSuccess(''), 5000);
+    } catch (error: any) {
+      console.error(`Erro ao atualizar ${activeTab}:`, error);
+      
+      let errorMessage = `Erro ao atualizar ${getTabLabel(activeTab)}`;
+      if (error?.response?.status === 403) {
+        errorMessage = 'Acesso negado. Apenas administradores podem editar.';
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+      
+      setError(errorMessage);
+      setTimeout(() => setError(''), 8000);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleDelete = (id: number) => {
+  // ✅ CORRIGIDO: Função assíncrona com tratamento de erro adequado
+  const handleDelete = async (id: number) => {
+    setLoading(true);
+    setError('');
+    setSuccess('');
+
     try {
-      deleteItem(activeTab, id);
+      await deleteItem(activeTab, id); // ← AGORA COM AWAIT
       setSuccess(`${getTabLabel(activeTab)} excluído com sucesso!`);
-      setTimeout(() => setSuccess(''), 3000);
-    } catch (error) {
-      setError(`Erro ao excluir ${getTabLabel(activeTab)}`);
+      setTimeout(() => setSuccess(''), 5000);
+    } catch (error: any) {
+      console.error(`Erro ao deletar ${activeTab}:`, error);
+      
+      let errorMessage = `Erro ao excluir ${getTabLabel(activeTab)}`;
+      if (error?.response?.status === 403) {
+        errorMessage = 'Acesso negado. Apenas administradores podem excluir.';
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+      
+      setError(errorMessage);
+      setTimeout(() => setError(''), 8000);
+    } finally {
+      setLoading(false);
     }
   };
 
   const getTabLabel = (tab: TabType): string => {
-    switch (tab) {
-      case 'group': return 'Grupo';
-      case 'device': return 'Device';
-      case 'value': return 'Value';
-      case 'package': return 'Package';
-    }
+    const labels = {
+      group: 'Grupo',
+      device: 'Device', 
+      value: 'Value',
+      package: 'Package'
+    };
+    return labels[tab];
   };
 
+  // ✅ Renderizar filtros hierárquicos
   const renderFilters = () => {
     if (activeTab === 'group') return null;
 
     return (
-      <div className="bg-gray-50 p-4 rounded-lg mb-4">
-        <p className="text-sm font-medium text-gray-700 mb-3">Filtros Hierárquicos:</p>
+      <div className="bg-gray-50 p-4 rounded-lg mb-6">
+        <h3 className="text-sm font-medium text-gray-700 mb-3">Filtros Hierárquicos</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Filtro de Grupo */}
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Grupo</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Grupo</label>
             <select
               value={selectedGroupId || ''}
               onChange={(e) => {
@@ -143,7 +231,7 @@ const GroupsMaintenancePage: React.FC = () => {
           {/* Filtro de Device */}
           {(activeTab === 'value' || activeTab === 'package') && (
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Device</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Device</label>
               <select
                 value={selectedDeviceId || ''}
                 onChange={(e) => {
@@ -165,7 +253,7 @@ const GroupsMaintenancePage: React.FC = () => {
           {/* Filtro de Value */}
           {activeTab === 'package' && (
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Value</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Value</label>
               <select
                 value={selectedValueId || ''}
                 onChange={(e) => {
@@ -228,9 +316,10 @@ const GroupsMaintenancePage: React.FC = () => {
               <button
                 key={tab.id}
                 onClick={() => handleTabChange(tab.id)}
-                className={`flex items-center gap-2 px-6 py-4 font-medium transition-all duration-200 ${
+                disabled={loading}
+                className={`flex items-center gap-2 px-6 py-4 font-medium transition-all duration-200 disabled:opacity-50 ${
                   activeTab === tab.id
-                    ? 'text-purple-600 border-b-2 border-purple-600 bg-purple-50'
+                    ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600'
                     : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
                 }`}
               >
@@ -241,27 +330,27 @@ const GroupsMaintenancePage: React.FC = () => {
           })}
         </div>
 
-        {/* Filters */}
+        {/* Content */}
         <div className="p-6">
           {renderFilters()}
+          
+          <TabCRUD
+            type={activeTab}
+            items={getFilteredItems()}
+            onAdd={handleAdd}
+            onUpdate={handleUpdate}
+            onDelete={handleDelete}
+            filters={{
+              groupId: selectedGroupId,
+              deviceId: selectedDeviceId,
+              valueId: selectedValueId,
+            }}
+            groups={groups}
+            devices={devices}
+            values={values}
+            loading={loading} // ← NOVO: Passa loading state
+          />
         </div>
-
-        {/* Tab Content */}
-        <TabCRUD
-          type={activeTab}
-          items={getFilteredItems()}
-          onAdd={handleAdd}
-          onUpdate={handleUpdate}
-          onDelete={handleDelete}
-          filters={{
-            groupId: selectedGroupId,
-            deviceId: selectedDeviceId,
-            valueId: selectedValueId,
-          }}
-          groups={groups}
-          devices={getFilteredDevices(selectedGroupId)}
-          values={getFilteredValues(selectedGroupId, selectedDeviceId)}
-        />
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
+// stock-control-frontend/src/components/common/ConfirmModal.tsx
 import React from 'react';
-import { AlertTriangle, Info, CheckCircle, XCircle } from 'lucide-react';
+import { AlertTriangle, Loader2 } from 'lucide-react';
 import BaseModal from './BaseModal';
-import LoadingSpinner from './LoadingSpinner';
 
 interface ConfirmModalProps {
   isOpen: boolean;
@@ -11,8 +11,8 @@ interface ConfirmModalProps {
   message: string;
   confirmText?: string;
   cancelText?: string;
-  type?: 'danger' | 'warning' | 'info' | 'success';
-  isLoading?: boolean;
+  type?: 'danger' | 'warning' | 'info';
+  loading?: boolean; // ← NOVO: Adicionar prop loading
 }
 
 const ConfirmModal: React.FC<ConfirmModalProps> = ({
@@ -24,67 +24,61 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
   confirmText = 'Confirmar',
   cancelText = 'Cancelar',
   type = 'warning',
-  isLoading = false
+  loading = false, // ← NOVO: Default false
 }) => {
-  const typeConfig = {
-    danger: {
-      icon: XCircle,
-      iconColor: 'text-red-600',
-      bgColor: 'bg-red-100',
-      buttonColor: 'from-red-500 to-red-600 hover:from-red-600 hover:to-red-700'
-    },
-    warning: {
-      icon: AlertTriangle,
-      iconColor: 'text-yellow-600',
-      bgColor: 'bg-yellow-100',
-      buttonColor: 'from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700'
-    },
-    info: {
-      icon: Info,
-      iconColor: 'text-blue-600',
-      bgColor: 'bg-blue-100',
-      buttonColor: 'from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700'
-    },
-    success: {
-      icon: CheckCircle,
-      iconColor: 'text-green-600',
-      bgColor: 'bg-green-100',
-      buttonColor: 'from-green-500 to-green-600 hover:from-green-600 hover:to-green-700'
+  const getIconColor = () => {
+    switch (type) {
+      case 'danger': return 'text-red-600';
+      case 'warning': return 'text-yellow-600';
+      case 'info': return 'text-blue-600';
+      default: return 'text-yellow-600';
     }
   };
 
-  const config = typeConfig[type];
-  const Icon = config.icon;
+  const getConfirmButtonStyle = () => {
+    switch (type) {
+      case 'danger': return 'bg-red-600 hover:bg-red-700 focus:ring-red-500';
+      case 'warning': return 'bg-yellow-600 hover:bg-yellow-700 focus:ring-yellow-500';
+      case 'info': return 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500';
+      default: return 'bg-yellow-600 hover:bg-yellow-700 focus:ring-yellow-500';
+    }
+  };
 
   return (
-    <BaseModal isOpen={isOpen} onClose={onClose} showCloseButton={false}>
+    <BaseModal isOpen={isOpen} onClose={onClose} title={title} size="sm">
       <div className="p-6">
-        <div className="flex items-center gap-4 mb-4">
-          <div className={`w-12 h-12 ${config.bgColor} rounded-full flex items-center justify-center`}>
-            <Icon className={config.iconColor} size={24} />
+        <div className="flex items-start gap-4">
+          <div className={`flex-shrink-0 w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center ${getIconColor()}`}>
+            <AlertTriangle size={20} />
           </div>
           <div className="flex-1">
-            <h2 className="text-xl font-bold text-gray-800">{title}</h2>
+            <p className="text-sm text-gray-600 leading-relaxed">
+              {message}
+            </p>
           </div>
         </div>
-        
-        <p className="text-gray-600 mb-6 ml-16">{message}</p>
-        
-        <div className="flex gap-3 justify-end">
+
+        <div className="flex justify-end gap-3 mt-6">
           <button
             onClick={onClose}
-            disabled={isLoading}
-            className="px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-all duration-200 disabled:opacity-50"
+            disabled={loading} // ← NOVO: Desabilitar quando loading
+            className="px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {cancelText}
           </button>
           <button
             onClick={onConfirm}
-            disabled={isLoading}
-            className={`px-4 py-2 bg-gradient-to-r ${config.buttonColor} text-white rounded-lg transition-all duration-200 flex items-center gap-2 disabled:opacity-50`}
+            disabled={loading} // ← NOVO: Desabilitar quando loading
+            className={`flex items-center gap-2 px-4 py-2 text-white rounded-lg focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${getConfirmButtonStyle()}`}
           >
-            {isLoading && <LoadingSpinner size="sm" />}
-            {confirmText}
+            {loading ? ( // ← NOVO: Mostrar loading
+              <>
+                <Loader2 className="animate-spin" size={16} />
+                Processando...
+              </>
+            ) : (
+              confirmText
+            )}
           </button>
         </div>
       </div>
