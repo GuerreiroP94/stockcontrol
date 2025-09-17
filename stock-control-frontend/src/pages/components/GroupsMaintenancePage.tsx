@@ -5,6 +5,7 @@ import { useGroupHierarchy } from '../../hooks/useGroupHierarchy';
 import TabCRUD from '../../components/common/TabCRUD';
 import ErrorMessage from '../../components/common/ErrorMessage';
 import SuccessMessage from '../../components/common/SuccessMessage';
+import DebugComponent from '../../components/Debug/DebugComponent';
 
 type TabType = 'group' | 'device' | 'value' | 'package';
 
@@ -452,6 +453,7 @@ const GroupsMaintenancePage: React.FC = () => {
           </div>
         </div>
       )}
+      {process.env.NODE_ENV === 'development' && <DebugComponent />}
     </div>
   );
 };
