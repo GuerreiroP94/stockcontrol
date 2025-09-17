@@ -282,6 +282,127 @@ namespace PreSystem.StockControl.WebApi.Controllers
             return Ok(result);
         }
 
+        // POST: api/grouphierarchy/debug-database
+        [HttpPost("debug-database")]
+        [Authorize(Roles = "admin")]
+        public async Task<ActionResult> DebugDatabase()
+        {
+            try
+            {
+                _logger.LogInformation("🔍 INICIANDO DEBUG DO BANCO DE DADOS");
+
+                var debugInfo = new
+                {
+                    timestamp = DateTime.UtcNow,
+                    database_tests = new List<object>()
+                };
+
+                // TESTE 1: Verificar conexão com banco
+                try
+                {
+                    var allGroups = await _hierarchyService.GetAllGroupsAsync();
+                    debugInfo.database_tests.Add(new
+                    {
+                        test = "GetAllGroups",
+                        success = true,
+                        count = allGroups.Count(),
+                        message = "Conexão com banco OK"
+                    });
+                    _logger.LogInformation("✅ Teste GetAllGroups: {Count} grupos encontrados", allGroups.Count());
+                }
+                catch (Exception ex)
+                {
+                    debugInfo.database_tests.Add(new
+                    {
+                        test = "GetAllGroups",
+                        success = false,
+                        error = ex.Message,
+                        message = "Erro ao conectar com banco ou consultar grupos"
+                    });
+                    _logger.LogError(ex, "❌ Erro no teste GetAllGroups");
+                }
+
+                // TESTE 2: Verificar se a tabela ComponentGroups existe
+                try
+                {
+                    // Usar o service para tentar uma operação mais básica
+                    var testResult = await _hierarchyService.GetGroupByIdAsync(999999); // ID que não existe
+                    debugInfo.database_tests.Add(new
+                    {
+                        test = "GetGroupById_NonExistent",
+                        success = true,
+                        result = testResult,
+                        message = "Tabela ComponentGroups existe e é acessível"
+                    });
+                    _logger.LogInformation("✅ Teste GetGroupById: Tabela existe");
+                }
+                catch (Exception ex)
+                {
+                    debugInfo.database_tests.Add(new
+                    {
+                        test = "GetGroupById_NonExistent",
+                        success = false,
+                        error = ex.Message,
+                        message = "Problema com tabela ComponentGroups"
+                    });
+                    _logger.LogError(ex, "❌ Erro no teste GetGroupById");
+                }
+
+                // TESTE 3: Testar criação simples
+                try
+                {
+                    var testGroupName = $"DEBUG_TEST_{DateTime.UtcNow:yyyyMMdd_HHmmss}";
+                    var createDto = new HierarchyItemCreateDto { Name = testGroupName };
+
+                    _logger.LogInformation("🔍 Tentando criar grupo de teste: {Name}", testGroupName);
+                    var createResult = await _hierarchyService.CreateGroupAsync(createDto);
+
+                    debugInfo.database_tests.Add(new
+                    {
+                        test = "CreateGroup_Test",
+                        success = createResult.Success,
+                        group_name = testGroupName,
+                        result = createResult,
+                        message = createResult.Success ? "Criação funcionou!" : $"Criação falhou: {createResult.Message}"
+                    });
+
+                    if (createResult.Success)
+                    {
+                        _logger.LogInformation("✅ Grupo de teste criado com sucesso: {Name}", testGroupName);
+                    }
+                    else
+                    {
+                        _logger.LogError("❌ Falha ao criar grupo de teste: {Message}", createResult.Message);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    debugInfo.database_tests.Add(new
+                    {
+                        test = "CreateGroup_Test",
+                        success = false,
+                        error = ex.Message,
+                        stack_trace = ex.StackTrace,
+                        message = "Exceção na criação de grupo"
+                    });
+                    _logger.LogError(ex, "❌ Exceção no teste CreateGroup");
+                }
+
+                _logger.LogInformation("🔍 DEBUG DO BANCO CONCLUÍDO");
+                return Ok(debugInfo);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "❌ ERRO CRÍTICO no debug do banco");
+                return StatusCode(500, new
+                {
+                    error = "Erro crítico no debug",
+                    message = ex.Message,
+                    stack_trace = ex.StackTrace
+                });
+            }
+        }
+
         #endregion
     }
 }
