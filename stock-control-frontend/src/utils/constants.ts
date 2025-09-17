@@ -1,30 +1,54 @@
 // stock-control-frontend/src/utils/constants.ts
 
-// Função para determinar a URL base da API
+// 🚀 CORREÇÃO PARA PRODUÇÃO NO RENDER
 const getApiBaseUrl = (): string => {
-  // SOLUÇÃO TEMPORÁRIA: Usar URL hardcoded para Render
-  const renderUrl = 'https://stock-control-backend.onrender.com/api';
-  
-  // Só usar localhost se estiver rodando localmente (window.location contém localhost)
-  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-    const localUrl = 'http://localhost:5000/api';
-    console.log('🏠 Desenvolvimento local:', localUrl);
-    return localUrl;
+  // 1. Primeiro, verificar se há variável de ambiente do build
+  if (process.env.REACT_APP_API_URL) {
+    console.log('🔧 Usando REACT_APP_API_URL:', process.env.REACT_APP_API_URL);
+    return process.env.REACT_APP_API_URL;
   }
-  
-  console.log('🚀 Produção Render:', renderUrl);
-  return renderUrl;
+
+  // 2. Detecção baseada no hostname atual
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    
+    console.log('🔍 Hostname detectado:', hostname);
+    
+    // Se estiver no Render (contém 'onrender.com')
+    if (hostname.includes('onrender.com') || hostname.includes('render.com')) {
+      const renderUrl = 'https://stock-control-backend.onrender.com/api';
+      console.log('🚀 PRODUÇÃO RENDER detectada:', renderUrl);
+      return renderUrl;
+    }
+    
+    // Se estiver em localhost
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      const localUrl = 'http://localhost:5123/api';
+      console.log('🏠 DESENVOLVIMENTO LOCAL detectado:', localUrl);
+      return localUrl;
+    }
+  }
+
+  // 3. Fallback para produção
+  const fallbackUrl = 'https://stock-control-backend.onrender.com/api';
+  console.log('⚠️ Usando fallback para produção:', fallbackUrl);
+  return fallbackUrl;
 };
 
 export const API_BASE_URL = getApiBaseUrl();
 
-// PAGINATION - ESTA ERA A CONSTANTE QUE ESTAVA FALTANDO!
+// 🚨 LOG FORÇADO PARA DEBUG
+console.log('🔧 === CONFIGURAÇÃO DE PRODUÇÃO ===');
+console.log('API_BASE_URL final:', API_BASE_URL);
+console.log('window.location.href:', typeof window !== 'undefined' ? window.location.href : 'N/A');
+console.log('Environment:', process.env.NODE_ENV);
+
+// Resto das constantes...
 export const PAGINATION = {
   DEFAULT_PAGE_SIZE: 10,
   PAGE_SIZE_OPTIONS: [10, 20, 50, 100]
 };
 
-// Rotas da aplicação
 export const ROUTES = {
   LOGIN: '/login',
   FORGOT_PASSWORD: '/forgot-password',
@@ -37,7 +61,6 @@ export const ROUTES = {
   SETTINGS: '/settings',
 };
 
-// Grupos de componentes
 export const COMPONENT_GROUPS = [
   'Semicondutor',
   'Resistor',
@@ -51,25 +74,21 @@ export const COMPONENT_GROUPS = [
   'Outros'
 ];
 
-// Ambientes de componentes
 export const COMPONENT_ENVIRONMENTS = {
   STOCK: 'estoque',
   LAB: 'laboratorio'
 } as const;
 
-// Tipos de movimentação
 export const MOVEMENT_TYPES = {
   ENTRADA: 'Entrada',
   SAIDA: 'Saida'
 } as const;
 
-// Roles de usuário
 export const USER_ROLES = {
   ADMIN: 'admin',
   OPERATOR: 'operator'
 } as const;
 
-// Mensagens do sistema
 export const MESSAGES = {
   LOGIN_SUCCESS: 'Login realizado com sucesso!',
   LOGIN_ERROR: 'Erro ao fazer login. Verifique suas credenciais.',
@@ -95,14 +114,10 @@ export const MESSAGES = {
   ERROR_NOT_FOUND: 'Registro não encontrado.'
 };
 
-// Outras constantes do sistema
 export const APP_NAME = 'Stock Control System';
 export const VERSION = '1.0.0';
+export const REQUEST_TIMEOUT = 10000;
 
-// Configurações de timeout
-export const REQUEST_TIMEOUT = 10000; // 10 segundos
-
-// Mensagens de erro padrão
 export const ERROR_MESSAGES = {
   NETWORK_ERROR: 'Erro de conexão com o servidor. Verifique sua internet.',
   TIMEOUT_ERROR: 'Tempo limite excedido. Tente novamente.',
@@ -113,7 +128,6 @@ export const ERROR_MESSAGES = {
   UNKNOWN_ERROR: 'Erro desconhecido. Tente novamente.'
 };
 
-// Status codes HTTP
 export const HTTP_STATUS = {
   OK: 200,
   CREATED: 201,
@@ -125,36 +139,41 @@ export const HTTP_STATUS = {
   INTERNAL_SERVER_ERROR: 500
 };
 
-// Debug das configurações
-console.log('📊 === CONFIGURAÇÕES DA API ===');
-console.log('NODE_ENV:', process.env.NODE_ENV);
-console.log('REACT_APP_API_URL:', process.env.REACT_APP_API_URL);
-console.log('API_BASE_URL final:', API_BASE_URL);
-console.log('window.location.origin:', typeof window !== 'undefined' ? window.location.origin : 'N/A');
-
-// Verificar se a URL está correta
-if (!API_BASE_URL.startsWith('http')) {
-  console.error('❌ URL da API inválida:', API_BASE_URL);
-} else {
-  console.log('✅ URL da API configurada corretamente');
-}
-
-// Função de debug para testar conectividade
-export const testApiConnectivity = async (): Promise<boolean> => {
+// 🧪 FUNÇÃO DE TESTE PARA PRODUÇÃO
+export const testBackendConnection = async (): Promise<{
+  success: boolean;
+  message: string;
+  details: any;
+}> => {
   try {
-    const baseUrl = API_BASE_URL.replace('/api', '');
-    const response = await fetch(`${baseUrl}/health`, {
+    console.log('🧪 Testando backend:', API_BASE_URL);
+    
+    // Teste de health check
+    const healthUrl = API_BASE_URL.replace('/api', '/health');
+    const response = await fetch(healthUrl, {
       method: 'GET',
-      mode: 'cors',
-      credentials: 'include'
+      mode: 'cors'
     });
     
-    const isConnected = response.ok;
-    console.log(`🔍 Teste de conectividade: ${isConnected ? '✅' : '❌'}`);
-    
-    return isConnected;
+    if (response.ok) {
+      const data = await response.json();
+      return {
+        success: true,
+        message: 'Backend conectado com sucesso!',
+        details: data
+      };
+    } else {
+      return {
+        success: false,
+        message: `Backend retornou status ${response.status}`,
+        details: { status: response.status, statusText: response.statusText }
+      };
+    }
   } catch (error) {
-    console.error('❌ Erro no teste de conectividade:', error);
-    return false;
+    return {
+      success: false,
+      message: `Erro ao conectar com o backend: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
+      details: { error }
+    };
   }
 };
