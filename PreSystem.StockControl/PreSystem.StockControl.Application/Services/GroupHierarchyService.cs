@@ -73,27 +73,68 @@ namespace PreSystem.StockControl.Application.Services
         {
             try
             {
-                // Verificar se já existe
-                var existing = await _groupRepository.GetByNameAsync(dto.Name);
-                if (existing != null)
+                _logger.LogInformation("🔍 INICIANDO CreateGroupAsync com nome: {Name}", dto.Name);
+
+                // ✅ VALIDAÇÃO MELHORADA
+                if (string.IsNullOrWhiteSpace(dto.Name))
                 {
+                    _logger.LogWarning("❌ Nome é obrigatório ou vazio");
                     return new HierarchyOperationResult
                     {
                         Success = false,
-                        Message = $"Grupo '{dto.Name}' já existe"
+                        Message = "Nome é obrigatório"
                     };
                 }
 
+                var trimmedName = dto.Name.Trim();
+                _logger.LogInformation("🔍 Nome após trim: '{TrimmedName}' (length: {Length})", trimmedName, trimmedName.Length);
+
+                // ✅ VERIFICAÇÃO DE DUPLICAÇÃO MELHORADA
+                _logger.LogInformation("🔍 Verificando se grupo já existe...");
+                try
+                {
+                    var existing = await _groupRepository.GetByNameAsync(trimmedName);
+                    if (existing != null)
+                    {
+                        _logger.LogWarning("❌ Grupo '{Name}' já existe com ID: {Id}", trimmedName, existing.Id);
+                        return new HierarchyOperationResult
+                        {
+                            Success = false,
+                            Message = $"Grupo '{trimmedName}' já existe"
+                        };
+                    }
+                    _logger.LogInformation("✅ Grupo não existe, pode criar");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "❌ Erro ao verificar duplicação para '{Name}'", trimmedName);
+                    throw; // Re-throw para ser capturado no catch principal
+                }
+
+                // ✅ CRIAÇÃO DO OBJETO MELHORADA
+                _logger.LogInformation("🔍 Criando objeto ComponentGroup...");
                 var group = new ComponentGroup
                 {
-                    Name = dto.Name,
+                    Name = trimmedName,
                     CreatedAt = DateTime.UtcNow
                 };
+                _logger.LogInformation("✅ Objeto criado: Name='{Name}', CreatedAt='{CreatedAt}'", group.Name, group.CreatedAt);
 
-                await _groupRepository.AddAsync(group);
-                _logger.LogInformation("Grupo criado: {Name}", group.Name);
+                // ✅ INSERÇÃO NO BANCO MELHORADA
+                _logger.LogInformation("🔍 Inserindo no banco de dados...");
+                try
+                {
+                    await _groupRepository.AddAsync(group);
+                    _logger.LogInformation("✅ Grupo inserido com sucesso. ID: {Id}", group.Id);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "❌ Erro ao inserir grupo '{Name}' no banco", trimmedName);
+                    throw; // Re-throw para ser capturado no catch principal
+                }
 
-                return new HierarchyOperationResult
+                // ✅ RESULTADO FINAL
+                var result = new HierarchyOperationResult
                 {
                     Success = true,
                     Item = new HierarchyItemDto
@@ -103,14 +144,20 @@ namespace PreSystem.StockControl.Application.Services
                         CreatedAt = group.CreatedAt
                     }
                 };
+
+                _logger.LogInformation("✅ CreateGroupAsync concluído com sucesso. Grupo ID: {Id}", group.Id);
+                return result;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro ao criar grupo");
+                // ✅ LOG DETALHADO DO ERRO
+                _logger.LogError(ex, "❌ ERRO CRÍTICO em CreateGroupAsync. Nome: '{Name}'. Exception: {ExceptionType}. Message: {Message}. StackTrace: {StackTrace}",
+                    dto?.Name, ex.GetType().Name, ex.Message, ex.StackTrace);
+
                 return new HierarchyOperationResult
                 {
                     Success = false,
-                    Message = "Erro ao criar grupo"
+                    Message = $"Erro ao criar grupo: {ex.Message}" // ✅ INCLUIR MENSAGEM DETALHADA
                 };
             }
         }
